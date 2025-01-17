@@ -1,6 +1,7 @@
 
 .venv/
 
+**.pyc
 
 sandbox/data_grille/
 
