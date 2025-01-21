@@ -8,6 +8,9 @@ import laspy
 import lazrs
 import numpy as np
 import pyvista as pv
+import laspy
+import numpy as np
+import open3d as o3d
 
 from utils.logger import setup_logging
 
@@ -37,9 +40,20 @@ def extract_zip(filepath:str, folderpath:str):
         archive.extractall(folderpath)
 
 
+def laz_to_ply(filepath_in:str, filepath_out:str):
+    las = laspy.read(filepath_in)
+
+    # Create an Open3D point cloud object
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(las.xyz)
+
+    # Save the point cloud to a .ply file
+    o3d.io.write_point_cloud(filepath_out, pcd)
+
+
 def laz_to_numpy(filepath_in) -> np.ndarray:
-    with laspy.open(filepath_in, 'r') as las:
-        return np.array(las.read().points.array.tolist())       # Covnert numpy void to np array
+    las = laspy.read(filepath_in)
+    return las.xyz
     # index 0  : X
     # index 1  : Y
     # index 2  : Z
@@ -53,7 +67,7 @@ def laz_to_numpy(filepath_in) -> np.ndarray:
     # index 10 : ?
 
 
-def show_point_cloud(points, types):
+def show_point_cloud(points):
     """
     Display a 3D point cloud using PyVista.
     
@@ -61,11 +75,13 @@ def show_point_cloud(points, types):
     - points (numpy.ndarray): A Nx3 array of 3D points (x, y, z).
     """
     point_cloud = pv.PolyData(points)
-    point_cloud["point_color"] = types
     plotter = pv.Plotter()
     plotter.add_points(point_cloud, cmap="viridis", point_size=1)
     plotter.set_background("white")
     plotter.show()
+
+
+
 
 
 if __name__=="__main__":
@@ -87,14 +103,20 @@ if __name__=="__main__":
     example_url = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_63234f509d6048bca3c9fd7928720ca1/ppk-lidar/BE/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz'
     # wget.download(example_url, out='sandbox/data_grille')
 
+    laz_filepath = 'sandbox/data_grille/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz'
 
-    # 'laz' to 'las'
-    array = laz_to_numpy('sandbox/data_grille/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz')
-    print(f'All data shape : {array.shape}')
-    print(f'example first data : {array[0]}')
+    # .laz to .ply
+    ply_filepath = laz_filepath.split('.')[0] + '.ply'
+    # laz_to_ply(laz_filepath, ply_filepath)
 
-    points = array[:, :3]
-    types =  array[:, 4]
+
+    # # .laz to .las
+    # array = laz_to_numpy(laz_filepath)
+    # points = array[:, :3]
+    # print(f'All data shape : {array.shape}')
+    # print(f'example first data : {array[0]}')
+
 
     # Call the function to display the point cloud
-    show_point_cloud(points, types)
+    # show_point_cloud(points)
+    
