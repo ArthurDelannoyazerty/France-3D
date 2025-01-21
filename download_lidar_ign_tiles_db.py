@@ -11,7 +11,7 @@ import pyvista as pv
 import laspy
 import numpy as np
 import open3d as o3d
-from tqdm import tqdm
+
 
 from utils.logger import setup_logging
 
@@ -105,6 +105,7 @@ def show_point_cloud(points):
     Parameters:
     - points (numpy.ndarray): A Nx3 array of 3D points (x, y, z).
     """
+    logger.info('Display point cloud')
     point_cloud = pv.PolyData(points)
     plotter = pv.Plotter()
     plotter.add_points(point_cloud, cmap="viridis", point_size=1)
@@ -113,41 +114,32 @@ def show_point_cloud(points):
 
 
 def ply_pointcloud_to_ply_mesh(ply_pointcloud_filepath:str, ply_mesh_filepath:str):
+    logger.info('Begin operation point cloud to mesh')
     # Load the point cloud
     pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
 
     # Estimate normals
     pcd.estimate_normals()
+    logger.info('Estimated normals done')
 
     # Compute average distance between points
     distances = pcd.compute_nearest_neighbor_distance()
     avg_dist = np.mean(distances)
-    radius = 1.5 * avg_dist
+    radius = 3 * avg_dist
+    logger.info('Distances nearest neighbors done')
 
         # Initialize the mesh
-    mesh = o3d.geometry.TriangleMesh()
-
-    # Define radii for the Ball Pivoting Algorithm
-    radii = [radius, radius * 2]
-
-    # Create a progress bar
-    with tqdm(total=len(radii), desc="Mesh Generation Progress") as pbar:
-        for r in radii:
-            # Apply Ball Pivoting Algorithm
-            mesh_segment = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-                pcd, o3d.utility.DoubleVector([r])
-            )
-            # Combine the mesh segments
-            mesh += mesh_segment
-            # Update the progress bar
-            pbar.update(1)
-
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+        pcd,
+        o3d.utility.DoubleVector([radius, radius*2])
+    )
 
     # Save the mesh
     o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
 
 
 def display_ply_mesh(mesh_filepath:str):
+    logger.info('Display mesh.')
     mesh = o3d.io.read_triangle_mesh(mesh_filepath)
 
     # Check if the mesh has vertex normals; if not, compute them
@@ -181,18 +173,17 @@ if __name__=="__main__":
     laz_filepath = 'sandbox/data_grille/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz'
 
     # .laz to numpy
-    # array = laz_to_numpy(laz_filepath)
-    # xyz = array[:, :3]
-    # xyz = decimate_array(xyz, 99)
+    # xyz = laz_to_numpy(laz_filepath)
+    # xyz = decimate_array(xyz, 75)
 
     # show_point_cloud(xyz)
 
-    # numpy to .ply
-    ply_filepath = laz_filepath.split('.')[0] + '.ply'
+    # # numpy to .ply
+    # ply_filepath = laz_filepath.split('.')[0] + '.ply'
     # numpy_to_ply(xyz, ply_filepath)
 
     
-    # .ply point cloud to .ply mesh
+    # # .ply point cloud to .ply mesh
     mesh_filepath =  'sandbox/data_grille/mesh.ply'
     # ply_pointcloud_to_ply_mesh(ply_filepath, mesh_filepath)
 
