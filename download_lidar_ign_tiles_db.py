@@ -11,10 +11,19 @@ import numpy as np
 import open3d as o3d
 import geopandas as gpd
 
+from pathlib import Path
 from utils.logger import setup_logging
 
 
 logger = logging.getLogger(__name__)
+
+
+def init_folders():
+    logger.info('Create folders for the project')
+    Path('data/data_grille'     ).mkdir(parents=True, exist_ok=True)
+    Path('data/point_cloud/laz/').mkdir(parents=True, exist_ok=True)
+    Path('data/point_cloud/ply/').mkdir(parents=True, exist_ok=True)
+    Path('data/mesh'            ).mkdir(parents=True, exist_ok=True)
 
 
 def download_lidar_ign_tiles_db(output_dir:str):
@@ -36,6 +45,7 @@ def download_lidar_ign_tiles_db(output_dir:str):
 
 def extract_zip(filepath:str, folderpath:str):
     """Extract the zip file(filepath) to the desired folder(folderpath)."""
+    logger.info(f'Extracting {filepath} into {folderpath}')
     with zipfile.ZipFile(filepath, 'r') as archive:
         archive.extractall(folderpath)
 
@@ -172,6 +182,8 @@ if __name__=="__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
     
+    # Init folder tree if not existing
+    init_folders()
 
     # Download zip if it doesn't exists
     zip_output_dir = "data/data_grille/"
