@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        #map { height: 90vh; }
+        .controls { text-align: center; margin: 10px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button id="send-coordinates">Send Coordinates</button>
+    </div>
+    <script>
+        const map = L.map('map').setView([46.603354, 1.888334], 6); // Centered on France
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Initialize Leaflet Draw
+        const drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        const drawControl = new L.Control.Draw({
+            edit: { featureGroup: drawnItems },
+            draw: {
+                polyline: false,
+                polygon: false,
+                circle: false,
+                marker: false,
+                circlemarker: false,
+                rectangle: true // Only enable rectangle drawing
+            }
+        });
+        map.addControl(drawControl);
+
+        let rectangleCoordinates = null;
+
+        // Handle draw events
+        map.on('draw:created', function (e) {
+            const layer = e.layer;
+            if (e.layerType === 'rectangle') {
+                rectangleCoordinates = layer.getBounds();
+                drawnItems.clearLayers(); // Allow only one rectangle at a time
+                drawnItems.addLayer(layer);
+            }
+        });
+
+        // Setup Socket.IO
+        const socket = io();
+
+        // Send coordinates when the button is clicked
+        document.getElementById('send-coordinates').addEventListener('click', function () {
+            if (rectangleCoordinates) {
+                const coords = {
+                    northEast: rectangleCoordinates.getNorthEast(),
+                    southWest: rectangleCoordinates.getSouthWest()
+                };
+                socket.emit('send_coordinates', coords);
+                alert('Coordinates sent!');
+            } else {
+                alert('Please draw a rectangle first.');
+            }
+        });
+    </script>
+</body>
+</html>
