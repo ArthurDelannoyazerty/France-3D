@@ -154,14 +154,24 @@ def ply_pointcloud_to_ply_mesh_poisson(ply_pointcloud_filepath:str,
     # Point cloud to mesh
     mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
         pcd,
-        depth=8,
-        width=0.0,
-        scale=1.1,
+        depth=depth,
+        width=width,
+        scale=scale,
         linear_fit=linear_fit
     )[0]
+    logger.info('Poisson process done')
 
     # Save the mesh
     o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
+
+
+def xyz_to_mesh(ply_pointcloud_filepath:str, mesh_filepath:str):
+    pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
+    xyz = np.asarray(pcd.points) 
+    mesh:pv.pointset.PolyData = pv.wrap(xyz).delaunay_2d(alpha=0.0, progress_bar=True)
+    mesh = mesh.compute_normals(progress_bar=True)
+    mesh.save(mesh_filepath)
+    return mesh
 
 
 
@@ -181,6 +191,15 @@ def display_ply_mesh(mesh_filepath:str):
 if __name__=="__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
+
+
+    INDEX_TILE_IGN = 1000
+    PERCENTAGE_POINT_TO_REMOVE = 50
+    SHOW_CLOUDPOINT = False
+    DO_DELAUNAY = False
+    DO_BALL_PIVOTING = False
+    DO_POISSON = True
+    
     
     # Init folder tree if not existing
     init_folders()
@@ -201,34 +220,31 @@ if __name__=="__main__":
 
 
     # download tile
-    index_tile = 1000       # Select a random tile for now
     folder_data_cloudpoint_laz = 'data/point_cloud/laz/'
     shp_file = zip_output_dir + 'TA_diff_pkk_lidarhd_classe.shp'
 
     shp_df = gpd.read_file(shp_file, engine="pyogrio")
-    url_tile:str      = shp_df.iloc[index_tile].url_telech
-    filename_tile:str = shp_df.iloc[index_tile].nom_pkk
+    url_tile:str      = shp_df.iloc[INDEX_TILE_IGN].url_telech
+    filename_tile:str = shp_df.iloc[INDEX_TILE_IGN].nom_pkk
     laz_filepath = folder_data_cloudpoint_laz + filename_tile
     
     if not os.path.isfile(laz_filepath):
-        logger.info(f'Downloading tile n°{index_tile} (.laz) into folder {folder_data_cloudpoint_laz}')
+        logger.info(f'Downloading tile n°{INDEX_TILE_IGN} (.laz) into folder {folder_data_cloudpoint_laz}')
         laz_filepath = wget.download(url_tile, out=folder_data_cloudpoint_laz)
         logger.info(f'Tile downloaded into : {laz_filepath}')
     else:
-        logger.info(f'Tile n°{index_tile} is already downloaded at {laz_filepath}')
+        logger.info(f'Tile n°{INDEX_TILE_IGN} is already downloaded at {laz_filepath}')
 
 
     # .laz to .ply
-    SHOW_CLOUDPOINT = False
-    percentage_point_to_remove = 95
     folder_data_cloudpoint_ply = 'data/point_cloud/ply/'
-    ply_filename = f'decimation-{str(percentage_point_to_remove)}---{filename_tile.split('.')[0]}.ply'
+    ply_filename = f'decimation-{str(PERCENTAGE_POINT_TO_REMOVE)}---{filename_tile.split('.')[0]}.ply'
     ply_filepath = folder_data_cloudpoint_ply + ply_filename
 
     if not os.path.isfile(ply_filepath):
         logger.info(f'Transformation .laz --> .ply  |  {laz_filepath} --> {ply_filepath}')
         xyz = laz_to_numpy(laz_filepath)
-        xyz_decimated = decimate_array(xyz, percentage_point_to_remove)
+        xyz_decimated = decimate_array(xyz, PERCENTAGE_POINT_TO_REMOVE)
         logger.info(f'Decimation done. Number of points : {xyz.shape[0]} (before) | {xyz_decimated.shape[0]} (after)')
         numpy_to_ply(xyz_decimated, ply_filepath)
         logger.info(f'Transformation .laz --> .ply done')
@@ -237,29 +253,37 @@ if __name__=="__main__":
         logger.info(f'File {ply_filepath} already exists.')
 
     
+    # .ply point cloud to .stl mesh with delaunay 2D  (don't work with too much point)
+    if DO_DELAUNAY:
+        mesh_folder = 'data/mesh/'
+        mesh_filename = f'delaunay---{ply_filename.split('.')[0]}.stl'
+        mesh_filepath = mesh_folder + mesh_filename
+        mesh = xyz_to_mesh(ply_filepath, mesh_filepath)
+
     # .ply point cloud to .ply mesh with ball pivoting
-    avg_radius = 4
-    mesh_folder = 'data/mesh/'
-    mesh_filename = f'ball_pivot-{ply_filepath}---avg_radius-{avg_radius}---{ply_filename}'
-    mesh_filepath = mesh_folder + mesh_filename
-    # ply_pointcloud_to_ply_mesh_ball_pivoting(ply_filepath, mesh_filepath, avg_radius)
-    # display_ply_mesh(mesh_filepath)
+    if DO_BALL_PIVOTING:
+        avg_radius = 4
+        mesh_filename = f'ball_pivot--avg_radius-{avg_radius}---{ply_filename}'
+        mesh_filepath = mesh_folder + mesh_filename
+        ply_pointcloud_to_ply_mesh_ball_pivoting(ply_filepath, mesh_filepath, avg_radius)
+        display_ply_mesh(mesh_filepath)
 
     
     # .ply point cloud to .ply mesh with poisson
-    depth = 8
-    width = 0.0, 
-    scale = 1.1, 
-    linear_fit = False
+    if DO_POISSON:
+        depth = 8
+        width = 0.0
+        scale = 1.1
+        linear_fit = False
 
-    mesh_folder = 'data/mesh/'
-    mesh_filename = f'poisson-{ply_filepath}---depth-{depth}---width-{width}---scale-{scale}---{ply_filename}'
-    mesh_filepath = mesh_folder + mesh_filename
+        mesh_folder = 'data/mesh/'
+        mesh_filename = f'poisson--depth-{int(depth*100)}--width-{int(width*100)}--scale-{int(scale*100)}---{ply_filename}'
+        mesh_filepath = mesh_folder + mesh_filename
 
-    ply_pointcloud_to_ply_mesh_poisson(ply_filepath, 
-                                       mesh_filepath, 
-                                       depth, 
-                                       width, 
-                                       scale, 
-                                       linear_fit)
-    display_ply_mesh(mesh_filepath)
+        ply_pointcloud_to_ply_mesh_poisson(ply_filepath, 
+                                           mesh_filepath, 
+                                           depth, 
+                                           width, 
+                                           scale, 
+                                           linear_fit)
+        display_ply_mesh(mesh_filepath)
