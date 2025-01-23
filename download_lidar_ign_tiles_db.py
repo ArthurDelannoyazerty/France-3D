@@ -1,19 +1,18 @@
 import sys
 import wget
 import logging
-import py7zr
 import os
 import zipfile
 import laspy
-import lazrs
 import numpy as np
 import pyvista as pv
 import laspy
 import numpy as np
 import open3d as o3d
-
+import geopandas as gpd
 
 from utils.logger import setup_logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +44,6 @@ def laz_to_numpy(filepath_in) -> np.ndarray:
     logger.info('Transforming .laz into numpy array.')
     las = laspy.read(filepath_in)
     return las.xyz
-    # index 0  : X
-    # index 1  : Y
-    # index 2  : Z
-    # index 3  : ?
-    # index 4  : 
-    # index 5  : ?
-    # index 6  : ?
-    # index 7  : ?
-    # index 8  : ?
-    # index 9  : ?
-    # index 10 : ?
 
 
 def numpy_to_ply(xyz:np.ndarray, filepath_out:str):
@@ -113,8 +101,8 @@ def show_point_cloud(points):
     plotter.show()
 
 
-def ply_pointcloud_to_ply_mesh(ply_pointcloud_filepath:str, ply_mesh_filepath:str):
-    logger.info('Begin operation point cloud to mesh')
+def ply_pointcloud_to_ply_mesh_ball_pivoting(ply_pointcloud_filepath:str, ply_mesh_filepath:str, avg_radius:float):
+    logger.info('Begin operation point cloud to mesh with ball pivoting method.')
     # Load the point cloud
     pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
 
@@ -125,10 +113,10 @@ def ply_pointcloud_to_ply_mesh(ply_pointcloud_filepath:str, ply_mesh_filepath:st
     # Compute average distance between points
     distances = pcd.compute_nearest_neighbor_distance()
     avg_dist = np.mean(distances)
-    radius = 3 * avg_dist
+    radius = avg_radius * avg_dist
     logger.info('Distances nearest neighbors done')
 
-        # Initialize the mesh
+    # point cloud to mesh
     mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
         pcd,
         o3d.utility.DoubleVector([radius, radius*2])
@@ -136,6 +124,35 @@ def ply_pointcloud_to_ply_mesh(ply_pointcloud_filepath:str, ply_mesh_filepath:st
 
     # Save the mesh
     o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
+
+
+def ply_pointcloud_to_ply_mesh_poisson(ply_pointcloud_filepath:str, 
+                                       ply_mesh_filepath:str, 
+                                       depth:int=8, 
+                                       width:float=0, 
+                                       scale:float=1.1, 
+                                       linear_fit:bool=False):
+    logger.info('Begin operation point cloud to mesh with poisson method.')
+    
+    # Load the point cloud
+    pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
+    
+    # Estimate normals
+    pcd.estimate_normals()
+    logger.info('Estimated normals done')
+
+    # Point cloud to mesh
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd,
+        depth=8,
+        width=0.0,
+        scale=1.1,
+        linear_fit=linear_fit
+    )[0]
+
+    # Save the mesh
+    o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
+
 
 
 def display_ply_mesh(mesh_filepath:str):
@@ -155,36 +172,82 @@ if __name__=="__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
     
-    zip_output_dir = "sandbox/data_grille/"
-    default_zip_name = 'grille.zip'
 
     # Download zip if it doesn't exists
+    zip_output_dir = "data/data_grille/"
+    default_zip_name = 'grille.zip'
     zip_filepath = zip_output_dir + default_zip_name
     if not os.path.isfile(zip_filepath):
         download_lidar_ign_tiles_db(zip_output_dir)
 
+
     # Extract files from zip
-    # extract_zip(zip_filepath, zip_output_dir)
+    nb_files_in_data_grille_folder = len(os.listdir(zip_output_dir))
+    if nb_files_in_data_grille_folder==1:
+        # If there is only one file in the folder, then the zip has not already been extracted
+        extract_zip(zip_filepath, zip_output_dir)
+
 
     # download tile
-    example_url = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_63234f509d6048bca3c9fd7928720ca1/ppk-lidar/BE/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz'
-    # wget.download(example_url, out='sandbox/data_grille')
+    index_tile = 1000       # Select a random tile for now
+    folder_data_cloudpoint_laz = 'data/point_cloud/laz/'
+    shp_file = zip_output_dir + 'TA_diff_pkk_lidarhd_classe.shp'
 
-    laz_filepath = 'sandbox/data_grille/LHD_FXX_0188_6861_PTS_C_LAMB93_IGN69.copc.laz'
+    shp_df = gpd.read_file(shp_file, engine="pyogrio")
+    url_tile:str      = shp_df.iloc[index_tile].url_telech
+    filename_tile:str = shp_df.iloc[index_tile].nom_pkk
+    laz_filepath = folder_data_cloudpoint_laz + filename_tile
+    
+    if not os.path.isfile(laz_filepath):
+        logger.info(f'Downloading tile n°{index_tile} (.laz) into folder {folder_data_cloudpoint_laz}')
+        laz_filepath = wget.download(url_tile, out=folder_data_cloudpoint_laz)
+        logger.info(f'Tile downloaded into : {laz_filepath}')
+    else:
+        logger.info(f'Tile n°{index_tile} is already downloaded at {laz_filepath}')
 
-    # .laz to numpy
-    # xyz = laz_to_numpy(laz_filepath)
-    # xyz = decimate_array(xyz, 75)
 
-    # show_point_cloud(xyz)
+    # .laz to .ply
+    SHOW_CLOUDPOINT = False
+    percentage_point_to_remove = 95
+    folder_data_cloudpoint_ply = 'data/point_cloud/ply/'
+    ply_filename = f'decimation-{str(percentage_point_to_remove)}---{filename_tile.split('.')[0]}.ply'
+    ply_filepath = folder_data_cloudpoint_ply + ply_filename
 
-    # # numpy to .ply
-    # ply_filepath = laz_filepath.split('.')[0] + '.ply'
-    # numpy_to_ply(xyz, ply_filepath)
+    if not os.path.isfile(ply_filepath):
+        logger.info(f'Transformation .laz --> .ply  |  {laz_filepath} --> {ply_filepath}')
+        xyz = laz_to_numpy(laz_filepath)
+        xyz_decimated = decimate_array(xyz, percentage_point_to_remove)
+        logger.info(f'Decimation done. Number of points : {xyz.shape[0]} (before) | {xyz_decimated.shape[0]} (after)')
+        numpy_to_ply(xyz_decimated, ply_filepath)
+        logger.info(f'Transformation .laz --> .ply done')
+        if SHOW_CLOUDPOINT: show_point_cloud(xyz_decimated)
+    else:
+        logger.info(f'File {ply_filepath} already exists.')
 
     
-    # # .ply point cloud to .ply mesh
-    mesh_filepath =  'sandbox/data_grille/mesh.ply'
-    # ply_pointcloud_to_ply_mesh(ply_filepath, mesh_filepath)
+    # .ply point cloud to .ply mesh with ball pivoting
+    avg_radius = 4
+    mesh_folder = 'data/mesh/'
+    mesh_filename = f'ball_pivot-{ply_filepath}---avg_radius-{avg_radius}---{ply_filename}'
+    mesh_filepath = mesh_folder + mesh_filename
+    # ply_pointcloud_to_ply_mesh_ball_pivoting(ply_filepath, mesh_filepath, avg_radius)
+    # display_ply_mesh(mesh_filepath)
 
+    
+    # .ply point cloud to .ply mesh with poisson
+    depth = 8
+    width = 0.0, 
+    scale = 1.1, 
+    linear_fit = False
+
+    mesh_folder = 'data/mesh/'
+    mesh_filename = f'poisson-{ply_filepath}---depth-{depth}---width-{width}---scale-{scale}---{ply_filename}'
+    mesh_filepath = mesh_folder + mesh_filename
+
+    ply_pointcloud_to_ply_mesh_poisson(ply_filepath, 
+                                       mesh_filepath, 
+                                       depth, 
+                                       width, 
+                                       scale, 
+                                       linear_fit)
     display_ply_mesh(mesh_filepath)
