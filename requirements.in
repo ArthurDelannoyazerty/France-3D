@@ -3,3 +3,8 @@ requests
 tqdm
 geopandas
 psutil
+pyvista
+laspy
+numpy
+open3d
+geopandas
