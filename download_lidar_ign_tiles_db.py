@@ -161,6 +161,10 @@ def ply_pointcloud_to_ply_mesh_poisson(ply_pointcloud_filepath:str,
     )[0]
     logger.info('Poisson process done')
 
+    logger.info('Estimating mesh vertex normals')
+    mesh.compute_vertex_normals()
+    mesh.paint_uniform_color(np.array([[0.5],[0.5],[0.5]]))
+
     # Save the mesh
     o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
 
@@ -184,7 +188,7 @@ def display_ply_mesh(mesh_filepath:str):
         mesh.compute_vertex_normals()
 
     # Visualize the mesh
-    o3d.visualization.draw_geometries([mesh])
+    o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
 
 
 
@@ -194,7 +198,7 @@ if __name__=="__main__":
 
 
     INDEX_TILE_IGN = 1000
-    PERCENTAGE_POINT_TO_REMOVE = 50
+    PERCENTAGE_POINT_TO_REMOVE = 25
     SHOW_CLOUDPOINT = False
     DO_DELAUNAY = False
     DO_BALL_PIVOTING = False
@@ -271,13 +275,13 @@ if __name__=="__main__":
     
     # .ply point cloud to .ply mesh with poisson
     if DO_POISSON:
-        depth = 8
-        width = 0.0
-        scale = 1.1
-        linear_fit = False
+        depth = 10              # more = more detail & slower                                       -> Maximum depth of the tree that will be used for surface reconstruction. Running at depth d corresponds to solving on a grid whose resolution is no larger than 2^d x 2^d x 2^d. Note that since the reconstructor adapts the octree to the sampling density, the specified reconstruction depth is only an upper bound.
+        width = 0.0             # more = more/equal details & more outside anomalies                -> Specifies the target width of the finest level octree cells. This parameter is ignored if depth is specified
+        scale = 1.0             # more = less details & more outside anomalies & faster             -> Specifies the ratio between the diameter of the cube used for reconstruction and the diameter of the samples’ bounding cube.
+        linear_fit = True       #                                                                   -> If true, the reconstructor will use linear interpolation to estimate the positions of iso-vertices.
 
         mesh_folder = 'data/mesh/'
-        mesh_filename = f'poisson--depth-{int(depth*100)}--width-{int(width*100)}--scale-{int(scale*100)}---{ply_filename}'
+        mesh_filename = f'poisson--depth-{int(depth*100)}--width-{int(width*100)}--scale-{int(scale*100)}--linear_fit-{linear_fit}---{ply_filename}'
         mesh_filepath = mesh_folder + mesh_filename
 
         ply_pointcloud_to_ply_mesh_poisson(ply_filepath, 
