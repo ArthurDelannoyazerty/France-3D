@@ -10,6 +10,8 @@ import laspy
 import numpy as np
 import open3d as o3d
 import geopandas as gpd
+import requests
+import json
 
 from pathlib import Path
 from utils.logger import setup_logging
@@ -24,6 +26,33 @@ def init_folders():
     Path('data/point_cloud/laz/').mkdir(parents=True, exist_ok=True)
     Path('data/point_cloud/ply/').mkdir(parents=True, exist_ok=True)
     Path('data/mesh'            ).mkdir(parents=True, exist_ok=True)
+
+def download_ign_available_tiles():
+    # Define the WFS URL
+    wfs_url = (
+        "https://data.geopf.fr/private/wfs/"
+        "?service=WFS&version=2.0.0&apikey=interface_catalogue"
+        "&request=GetFeature&typeNames=IGNF_LIDAR-HD_TA:nuage-dalle&outputFormat=application/json"
+    )
+
+    # Send a GET request to the WFS service
+    response = requests.get(wfs_url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the JSON content
+        data = response.json()
+
+        # Define the output file path
+        output_file = 'lidar_data.json'
+
+        # Write the JSON data to a file
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+        print(f"Data successfully downloaded and saved to {output_file}")
+    else:
+        print(f"Failed to retrieve data. HTTP Status code: {response.status_code}")
 
 
 def download_lidar_ign_tiles_db(output_dir:str):
