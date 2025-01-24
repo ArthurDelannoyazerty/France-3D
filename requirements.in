@@ -9,3 +9,4 @@ numpy
 open3d
 geopandas
 lazrs
+flask-socketio

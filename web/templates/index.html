@@ -17,7 +17,7 @@
 <body>
     <div id="map"></div>
     <div class="controls">
-        <button id="send-coordinates">Send Coordinates</button>
+        <button id="send-geometry">Send Selection</button>
     </div>
     <script>
         const map = L.map('map').setView([46.603354, 1.888334], 6); // Centered on France
@@ -35,42 +35,33 @@
         const drawControl = new L.Control.Draw({
             edit: { featureGroup: drawnItems },
             draw: {
+                rectangle: true,
+                polygon: true,
                 polyline: false,
-                polygon: false,
-                circle: false,
-                marker: false,
-                circlemarker: false,
-                rectangle: true // Only enable rectangle drawing
+                circle: true,
+                marker: false,  // Disable marker drawing
+                circlemarker: false // Disable circle marker drawing
             }
         });
         map.addControl(drawControl);
 
-        let rectangleCoordinates = null;
-
-        // Handle draw events
+        // Collect drawn geometry in GeoJSON format
         map.on('draw:created', function (e) {
             const layer = e.layer;
-            if (e.layerType === 'rectangle') {
-                rectangleCoordinates = layer.getBounds();
-                drawnItems.clearLayers(); // Allow only one rectangle at a time
-                drawnItems.addLayer(layer);
-            }
+            drawnItems.addLayer(layer); // Add the drawn item to the map
         });
 
         // Setup Socket.IO
         const socket = io();
 
-        // Send coordinates when the button is clicked
-        document.getElementById('send-coordinates').addEventListener('click', function () {
-            if (rectangleCoordinates) {
-                const coords = {
-                    northEast: rectangleCoordinates.getNorthEast(),
-                    southWest: rectangleCoordinates.getSouthWest()
-                };
-                socket.emit('send_coordinates', coords);
-                alert('Coordinates sent!');
+        // Send GeoJSON data when the button is clicked
+        document.getElementById('send-geometry').addEventListener('click', function () {
+            const geojson = drawnItems.toGeoJSON();
+            if (geojson.features.length > 0) {
+                socket.emit('send_geometry', JSON.stringify(geojson));
+                alert('Selection sent to the server!');
             } else {
-                alert('Please draw a rectangle first.');
+                alert('Please make a selection on the map first.');
             }
         });
     </script>
