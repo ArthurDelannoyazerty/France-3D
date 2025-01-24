@@ -5,12 +5,12 @@ from shapely.geometry import shape
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO
 from datetime import datetime
-from main import geodataframe_from_leaflet_to_ign, geodataframe_from_ign_to_leaflet
+from tiles import geodataframe_from_leaflet_to_ign, geodataframe_from_ign_to_leaflet
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-gpkg_folder = 'data/geojson/demand/'
+gpkg_folder = 'data/geojson/order/'
 GEOJSON_PRETTY_PRINT = True
 
 

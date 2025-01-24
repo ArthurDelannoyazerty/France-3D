@@ -12,6 +12,10 @@ import open3d as o3d
 import geopandas as gpd
 import requests
 import json
+import geopandas as gpd
+from shapely.geometry import mapping
+from shapely.ops import unary_union
+import json
 
 from pathlib import Path
 from utils.logger import setup_logging
@@ -20,63 +24,49 @@ from utils.logger import setup_logging
 logger = logging.getLogger(__name__)
 
 
+crs_leaflet = 'EPSG:4326'
+crs_ign =     'EPSG:2154'
+
+
 def init_folders():
     logger.info('Create folders for the project')
-    Path('data/data_grille'     ).mkdir(parents=True, exist_ok=True)
-    Path('data/point_cloud/laz/').mkdir(parents=True, exist_ok=True)
-    Path('data/point_cloud/ply/').mkdir(parents=True, exist_ok=True)
-    Path('data/mesh'            ).mkdir(parents=True, exist_ok=True)
+    Path('data/data_grille'      ).mkdir(parents=True, exist_ok=True)
+    Path('data/point_cloud/laz/' ).mkdir(parents=True, exist_ok=True)
+    Path('data/point_cloud/ply/' ).mkdir(parents=True, exist_ok=True)
+    Path('data/mesh'             ).mkdir(parents=True, exist_ok=True)
+    Path('data/geojson/order'    ).mkdir(parents=True, exist_ok=True)
+    Path('data/geojson/all_tiles').mkdir(parents=True, exist_ok=True)
 
-def download_ign_available_tiles():
+
+def geodataframe_from_leaflet_to_ign(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    gdf = gdf.set_crs(crs_leaflet)
+    gdf_transformed  = gdf.to_crs(crs_ign)
+    return gdf_transformed
+
+def geodataframe_from_ign_to_leaflet(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    gdf = gdf.set_crs(crs_ign)
+    gdf_transformed  = gdf.to_crs(crs_leaflet)
+    return gdf_transformed
+
+
+def download_ign_available_tiles(output_filepath:str, force_download:bool=False):
+    # If file already exists and no force, then do not download file
+    if os.path.isfile(output_filepath) and not force_download: return
+
     # Define the WFS URL
     wfs_url = (
         "https://data.geopf.fr/private/wfs/"
         "?service=WFS&version=2.0.0&apikey=interface_catalogue"
         "&request=GetFeature&typeNames=IGNF_LIDAR-HD_TA:nuage-dalle&outputFormat=application/json"
     )
-
-    # Send a GET request to the WFS service
     response = requests.get(wfs_url)
-
-    # Check if the request was successful
     if response.status_code == 200:
-        # Parse the JSON content
         data = response.json()
-
-        # Define the output file path
-        output_file = 'lidar_data.json'
-
-        # Write the JSON data to a file
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-
-        print(f"Data successfully downloaded and saved to {output_file}")
+        logger.info(f"Data successfully downloaded and saved to {output_filepath}")
     else:
-        print(f"Failed to retrieve data. HTTP Status code: {response.status_code}")
-
-
-def download_lidar_ign_tiles_db(output_dir:str):
-    url1 = "https://diffusion-lidarhd-classe.ign.fr/download/lidar/shp/classe"
-    url2 = "https://zenodo.org/records/13793544/files/grille.zip"
-
-    try:
-        logger.info(f'Downloading IGN LIDAR Database from url : {url1}')
-        wget.download(url=url1, out=output_dir)
-    except:
-        logger.info(f'Error while downloading from : {url1}  | Trying with : {url2}')
-        try:
-            wget.download(url=url2, out=output_dir)
-        except:
-            logger.error('Download failed for both url, shuting down...')
-            sys.exit(1)
-    logger.info(f'Files downloaded in : {output_dir}')
-
-
-def extract_zip(filepath:str, folderpath:str):
-    """Extract the zip file(filepath) to the desired folder(folderpath)."""
-    logger.info(f'Extracting {filepath} into {folderpath}')
-    with zipfile.ZipFile(filepath, 'r') as archive:
-        archive.extractall(folderpath)
+        logger.info(f"Failed to retrieve data. HTTP Status code: {response.status_code}")
 
 
 def laz_to_numpy(filepath_in) -> np.ndarray:
@@ -220,13 +210,15 @@ def display_ply_mesh(mesh_filepath:str):
     o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
 
 
+def download_tiles_order(geojson_order_filepath:str):
+    pass
+
 
 if __name__=="__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
 
 
-    INDEX_TILE_IGN = 1000
     PERCENTAGE_POINT_TO_REMOVE = 25
     SHOW_CLOUDPOINT = False
     DO_DELAUNAY = False
@@ -237,36 +229,40 @@ if __name__=="__main__":
     # Init folder tree if not existing
     init_folders()
 
-    # Download zip if it doesn't exists
-    zip_output_dir = "data/data_grille/"
-    default_zip_name = 'grille.zip'
-    zip_filepath = zip_output_dir + default_zip_name
-    if not os.path.isfile(zip_filepath):
-        download_lidar_ign_tiles_db(zip_output_dir)
+    filepath_all_tiles_geojson = 'data/data_grille/geojson_tiles_available.geojson'
+    download_ign_available_tiles(filepath_all_tiles_geojson)
+
+    exit(0)
+    # # Download zip if it doesn't exists
+    # zip_output_dir = "data/data_grille/"
+    # default_zip_name = 'grille.zip'
+    # zip_filepath = zip_output_dir + default_zip_name
+    # if not os.path.isfile(zip_filepath):
+    #     download_lidar_ign_tiles_db(zip_output_dir)
 
 
-    # Extract files from zip
-    nb_files_in_data_grille_folder = len(os.listdir(zip_output_dir))
-    if nb_files_in_data_grille_folder==1:
-        # If there is only one file in the folder, then the zip has not already been extracted
-        extract_zip(zip_filepath, zip_output_dir)
+    # # Extract files from zip
+    # nb_files_in_data_grille_folder = len(os.listdir(zip_output_dir))
+    # if nb_files_in_data_grille_folder==1:
+    #     # If there is only one file in the folder, then the zip has not already been extracted
+    #     extract_zip(zip_filepath, zip_output_dir)
 
 
-    # download tile
-    folder_data_cloudpoint_laz = 'data/point_cloud/laz/'
-    shp_file = zip_output_dir + 'TA_diff_pkk_lidarhd_classe.shp'
+    # # download tile
+    # folder_data_cloudpoint_laz = 'data/point_cloud/laz/'
+    # shp_file = zip_output_dir + 'TA_diff_pkk_lidarhd_classe.shp'
 
-    shp_df = gpd.read_file(shp_file, engine="pyogrio")
-    url_tile:str      = shp_df.iloc[INDEX_TILE_IGN].url_telech
-    filename_tile:str = shp_df.iloc[INDEX_TILE_IGN].nom_pkk
-    laz_filepath = folder_data_cloudpoint_laz + filename_tile
+    # shp_df = gpd.read_file(shp_file, engine="pyogrio")
+    # url_tile:str      = shp_df.iloc[INDEX_TILE_IGN].url_telech
+    # filename_tile:str = shp_df.iloc[INDEX_TILE_IGN].nom_pkk
+    # laz_filepath = folder_data_cloudpoint_laz + filename_tile
     
-    if not os.path.isfile(laz_filepath):
-        logger.info(f'Downloading tile n°{INDEX_TILE_IGN} (.laz) into folder {folder_data_cloudpoint_laz}')
-        laz_filepath = wget.download(url_tile, out=folder_data_cloudpoint_laz)
-        logger.info(f'Tile downloaded into : {laz_filepath}')
-    else:
-        logger.info(f'Tile n°{INDEX_TILE_IGN} is already downloaded at {laz_filepath}')
+    # if not os.path.isfile(laz_filepath):
+    #     logger.info(f'Downloading tile n°{INDEX_TILE_IGN} (.laz) into folder {folder_data_cloudpoint_laz}')
+    #     laz_filepath = wget.download(url_tile, out=folder_data_cloudpoint_laz)
+    #     logger.info(f'Tile downloaded into : {laz_filepath}')
+    # else:
+    #     logger.info(f'Tile n°{INDEX_TILE_IGN} is already downloaded at {laz_filepath}')
 
 
     # .laz to .ply
