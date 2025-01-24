@@ -10,24 +10,24 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 
 gpkg_folder = 'data/gpkg/'
+GEOJSON_PRETTY_PRINT = True
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @socketio.on('send_geometry')
-def handle_geometry(data):
+def handle_geometry(geojson):
     try:
-        # Convert GeoJSON to GeoDataFrame
-        features = json.loads(data)['features']
-        geometries = [shape(feature['geometry']) for feature in features]
-        geo_df = gpd.GeoDataFrame(geometry=geometries, crs="EPSG:4326")
-
-        # Save as a GeoPackage
-        output_file = f'{int(datetime.now().timestamp())}--{request.sid}--gpkg_zone.gpkg'
+        output_file = f'{int(datetime.now().timestamp())}--{request.sid}.geojson'
         output_filepath = gpkg_folder + output_file
-        geo_df.to_file(output_filepath, driver="GPKG")
+        with open(output_filepath, 'w') as f:
+            if GEOJSON_PRETTY_PRINT:
+                f.write(json.dumps(json.loads(geojson), indent=1))
+            else:
+                f.write(geojson)
         print(f"GeoPackage saved: {output_file}")
+        socketio.emit('geojson_received')
     except Exception as e:
         print(f"Error processing geometry: {e}")
 

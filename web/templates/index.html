@@ -38,7 +38,7 @@
                 rectangle: true,
                 polygon: true,
                 polyline: false,
-                circle: true,
+                circle: false,
                 marker: false,  // Disable marker drawing
                 circlemarker: false // Disable circle marker drawing
             }
@@ -57,13 +57,24 @@
         // Send GeoJSON data when the button is clicked
         document.getElementById('send-geometry').addEventListener('click', function () {
             const geojson = drawnItems.toGeoJSON();
-            if (geojson.features.length > 0) {
-                socket.emit('send_geometry', JSON.stringify(geojson));
-                alert('Selection sent to the server!');
-            } else {
+            if (geojson.features.length < 1) {
                 alert('Please make a selection on the map first.');
             }
+            else if (geojson.features.length > 1) {
+                alert('Please make only one selection');
+            }
+            else {
+                socket.emit('send_geometry', JSON.stringify(geojson));
+            }
         });
+
+        socket.on(
+            'geojson_received', 
+            function() {
+                alert('Order received by the server.');
+            }
+        )
+
     </script>
 </body>
 </html>
