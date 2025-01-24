@@ -1,5 +1,6 @@
 import geopandas as gpd
 from shapely.geometry import mapping
+from shapely.ops import unary_union
 import json
 
 crs_leaflet = 'EPSG:4326'
@@ -17,17 +18,15 @@ def geodataframe_from_ign_to_leaflet(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gdf_transformed
 
 
-tiles_filepath = 'data/data_grille/TA_diff_pkk_lidarhd_classe.shp'
 
-tiles_df:gpd.GeoDataFrame = gpd.read_file(tiles_filepath, engine="pyogrio")
-tiles_df.set_crs(crs_ign)
+if __name__=="__main__":
+    tiles_filepath = 'data/data_grille/TA_diff_pkk_lidarhd_classe.shp'
 
+    tiles_df:gpd.GeoDataFrame = gpd.read_file(tiles_filepath, engine="pyogrio")
+    tiles_df.set_crs(crs_ign)
 
+    merged_polygone = unary_union(list(tiles_df['geometry']))
+    geojson = mapping(merged_polygone)
 
-
-geojson = mapping(tiles_df['geometry'][:10000])
-
-with open('data/geojson/all_tiles/all_tiles.geojson', 'w') as f:
-    f.write(json.dumps(geojson))
-
-
+    with open('data/geojson/all_tiles/all_tiles.geojson', 'w') as f:
+        f.write(json.dumps(geojson))
