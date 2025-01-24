@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
     <style>
         #map { height: 90vh; }
         .controls { text-align: center; margin: 10px; }
@@ -54,6 +55,20 @@
         // Setup Socket.IO
         const socket = io();
 
+        // Request and display polygons from the server
+        socket.emit("request_available_tiles");
+
+        socket.on("receive_geojson", function (geojsonString) {
+            const geojsonData = JSON.parse(geojsonString);
+            const staticPolygons = L.geoJSON(geojsonData, {
+                style: {
+                    color: 'blue',
+                    weight: 2,
+                    fillOpacity: 0.3
+                }
+            }).addTo(map);
+        });
+
         // Send GeoJSON data when the button is clicked
         document.getElementById('send-geometry').addEventListener('click', function () {
             const geojson = drawnItems.toGeoJSON();
@@ -74,7 +89,6 @@
                 alert('Order received by the server.');
             }
         )
-
     </script>
 </body>
 </html>
