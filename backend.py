@@ -1,5 +1,6 @@
 import json
 import geopandas as gpd
+from pathlib import Path
 
 from shapely.geometry import shape
 from flask import Flask, render_template, request
@@ -10,7 +11,7 @@ from tiles import geodataframe_from_leaflet_to_ign, geodataframe_from_ign_to_lea
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-gpkg_folder = 'data/orders/'
+orders_folder = 'data/orders/'
 
 
 @app.route('/')
@@ -18,20 +19,27 @@ def index():
     return render_template('index.html')
 
 @socketio.on('send_geometry')
-def handle_geometry(geojson):
+def handle_geometry(geojson_str):
     try:
-        # Save geojson as crs_leaflet
-        output_file = f'{int(datetime.now().timestamp())}--{request.sid}.geojson'
-        output_filepath = gpkg_folder + output_file
-        with open(output_filepath, 'w') as f:
-            f.write(geojson)
-        print(f"GeoPackage saved: {output_file}")
+        # Transform the string of geojson into a GeoDataFrame ovject
+        geojson_dict = json.loads(geojson_str)
+        geometry = geojson_dict["features"][0]["geometry"]
+        geojson_data = [{"geometry": shape(geometry)}]
+        gdf = gpd.GeoDataFrame.from_dict(geojson_data)
 
-        # Load, change crs and save again
-        gdf:gpd.GeoDataFrame = gpd.read_file(output_filepath, engine="pyogrio")
+        # Transform the coordinate system
         gdf = geodataframe_from_leaflet_to_ign(gdf)
-        gdf.to_file(output_filepath, driver='GeoJSON')
+        
+        # Create paths
+        order_folder = orders_folder + str(int(datetime.now().timestamp())) + '--' + str(request.sid) + '/'
+        output_filename = 'zone.geojson'
+        output_filepath = order_folder + output_filename
+        
+        # Create folder for the current order (after the transformation operation because not created if an error occurs)
+        Path(order_folder).mkdir(parents=True, exist_ok=True)
 
+        # Save the geodataframe to file
+        gdf.to_file(output_filepath, driver='GeoJSON')
         socketio.emit('geojson_received')
     except Exception as e:
         print(f"Error processing geometry: {e}")

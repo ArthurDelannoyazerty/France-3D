@@ -17,6 +17,8 @@ from shapely.geometry import mapping
 from shapely.ops import unary_union
 import json
 
+from shapely.vectorized import contains
+from shapely.geometry import Point
 from pathlib import Path
 from utils.logger import setup_logging
 
@@ -96,8 +98,7 @@ def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str
 
 def laz_to_numpy(filepath_in) -> np.ndarray:
     logger.info('Transforming .laz into numpy array.')
-    las = laspy.read(filepath_in)
-    return las.xyz
+    return laspy.read(filepath_in).xyz
 
 
 def numpy_to_ply(xyz:np.ndarray, filepath_out:str):
@@ -125,20 +126,12 @@ def decimate_array(array:np.ndarray, percentage_to_remove):
     logger.info(f'Decimating array of shape {array.shape} by {percentage_to_remove}%')
     if not 0 <= percentage_to_remove <= 100:
         raise ValueError("Percentage must be between 0 and 100.")
+    
+    mask = np.random.rand(array.shape[0]) > (percentage_to_remove / 100.0)
+    decimated_array = array[mask]
 
-    total_rows = array.shape[0]
-    num_rows_to_remove = int(total_rows * (percentage_to_remove / 100.0))
-
-    # Generate random indices to remove
-    indices_to_remove = np.random.choice(total_rows, num_rows_to_remove, replace=False)
-
-    # Create a mask that is True for rows to keep
-    mask = np.ones(total_rows, dtype=bool)
-    mask[indices_to_remove] = False
-
-    # Return the array with the specified rows removed
-    return array[mask]
-
+    logger.info(f'Decimation done. Number of points : {array.shape[0]} (before) | {decimated_array.shape[0]} (after)')
+    return decimated_array
 
 def display_point_cloud(points):
     """
@@ -211,7 +204,8 @@ def display_ply_mesh(mesh_filepath:str):
     o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
 
 
-def get_gdf_for_order(geojson_order_filepath:str, geojson_all_tiles_available_filepath:str) -> gpd.GeoDataFrame:
+def get_intersecting_tiles_from_order(geojson_order_filepath:str, geojson_all_tiles_available_filepath:str) -> gpd.GeoDataFrame:
+    logger.info('Executing intersection of tiles for the order')
     logger.info('Loading geojson of all tiles available')
     available_tiles_gdf = gpd.read_file(geojson_all_tiles_available_filepath)
     
@@ -219,22 +213,29 @@ def get_gdf_for_order(geojson_order_filepath:str, geojson_all_tiles_available_fi
     order_gdf = gpd.read_file(geojson_order_filepath)
     logger.info(f'Order geojson head : {order_gdf.head()}')
 
-    logger.info('Filtering the interescting tiles')
+    logger.info('Filtering the intersecting tiles')
     intersect_gdf = available_tiles_gdf[available_tiles_gdf.intersects(order_gdf.geometry.iloc[0])]
     logger.info(f'Intersect GeoDataFrame head : {intersect_gdf.head()}')
     return intersect_gdf
 
 
-def download_tiles_from_gdf(gdf:gpd.GeoDataFrame):
-    logger.info('Download .laz tiles')
+def download_tiles_from_gdf(gdf:gpd.GeoDataFrame, laz_folderpath:str):
     for index, row in gdf.iterrows():
         filename = row['name']
         url = row['url']
-        filepath = laz_file + filename
+        filepath = laz_folderpath + filename
         if not os.path.isfile(filepath):
             logger.info(f'Downloading file {filename} into {filepath}')
             wget.download(url, out=filepath)
 
+
+def filter_points_by_polygon(xyz, polygon):
+    # Use shapely.vectorized.contains for efficient point-in-polygon testing
+    logger.info(f'Filtering {xyz.shape[0]} points with the polygon {polygon}')
+    inside_mask = contains(polygon, xyz[:, 0], xyz[:, 1])
+    filtered_points = xyz[inside_mask]
+    logger.info(f'Points filtered. {xyz.shape[0]} --> {filtered_points.shape[0]} ({filtered_points.shape[0]/xyz.shape[0]} %)')
+    return filtered_points
 
 
 if __name__=="__main__":
@@ -243,7 +244,7 @@ if __name__=="__main__":
 
 
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
-    PERCENTAGE_POINT_TO_REMOVE = 25
+    PERCENTAGE_POINT_TO_REMOVE = 0
     SHOW_CLOUDPOINT = False
     DO_POISSON = True
     
@@ -258,80 +259,43 @@ if __name__=="__main__":
         download_ign_available_tiles(filepath_all_tiles_geojson)
         merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
-    
-    order_filepath = 'data/orders/1737766321--g8sn5PjfAFUe11jrAAAB.geojson'
-    gdf_intersect = get_gdf_for_order(order_filepath , filepath_all_tiles_geojson)
 
-    laz_file = 'data/point_cloud/laz/'
-    download_tiles_from_gdf(gdf_intersect)
+    order_name = '1737817398--5XgZhio-_bDeS4AqAAAB'
+    orders_folder  = 'data/orders/'
+    laz_folderpath = 'data/point_cloud/laz/'
+    order_filepath      = orders_folder + order_name + '/'
+    order_zone_filepath = order_filepath + 'zone.geojson'
+    order_intersects    = order_filepath + 'tiles_intersect.geojson'
+
+    # Do the intersection if not already done
+    if not os.path.isfile(order_intersects):
+        gdf_intersect = get_intersecting_tiles_from_order(order_filepath , filepath_all_tiles_geojson)
+        gdf_intersect.to_file(order_intersects)
+    
+    # Download the non downloaded tiles
+    gdf_intersect = gpd.read_file(order_intersects)
+    download_tiles_from_gdf(gdf_intersect, laz_folderpath)
+    
+    # point cloud .laz to .ply + point decimation + point filtering by user zone selection
+    ply_filepath = order_filepath + 'point_cloud.ply'
+    if not os.path.isfile(ply_filepath):
+        polygon = gpd.read_file(order_zone_filepath).iloc[0].geometry
+        list_intersecting_tiles_filename = list(gdf_intersect['name'])
+        merged_xyz = list()
+        for tile_filename in list_intersecting_tiles_filename:
+            tile_filepath = laz_folderpath + tile_filename
+            xyz = laz_to_numpy(tile_filepath)
+            xyz = decimate_array(xyz, PERCENTAGE_POINT_TO_REMOVE)
+            filtered_array = filter_points_by_polygon(xyz, polygon)
+            if SHOW_CLOUDPOINT:
+                display_point_cloud(xyz)
+                display_point_cloud(filtered_array)
+            merged_xyz.append(filtered_array)
+        merged_xyz = np.array(merged_xyz).squeeze()
+        numpy_to_ply(merged_xyz, ply_filepath)
 
     exit(0)
-    # # Download zip if it doesn't exists
-    # zip_output_dir = "data/data_grille/"
-    # default_zip_name = 'grille.zip'
-    # zip_filepath = zip_output_dir + default_zip_name
-    # if not os.path.isfile(zip_filepath):
-    #     download_lidar_ign_tiles_db(zip_output_dir)
-
-
-    # # Extract files from zip
-    # nb_files_in_data_grille_folder = len(os.listdir(zip_output_dir))
-    # if nb_files_in_data_grille_folder==1:
-    #     # If there is only one file in the folder, then the zip has not already been extracted
-    #     extract_zip(zip_filepath, zip_output_dir)
-
-
-    # # download tile
-    # folder_data_cloudpoint_laz = 'data/point_cloud/laz/'
-    # shp_file = zip_output_dir + 'TA_diff_pkk_lidarhd_classe.shp'
-
-    # shp_df = gpd.read_file(shp_file, engine="pyogrio")
-    # url_tile:str      = shp_df.iloc[INDEX_TILE_IGN].url_telech
-    # filename_tile:str = shp_df.iloc[INDEX_TILE_IGN].nom_pkk
-    # laz_filepath = folder_data_cloudpoint_laz + filename_tile
-    
-    # if not os.path.isfile(laz_filepath):
-    #     logger.info(f'Downloading tile n°{INDEX_TILE_IGN} (.laz) into folder {folder_data_cloudpoint_laz}')
-    #     laz_filepath = wget.download(url_tile, out=folder_data_cloudpoint_laz)
-    #     logger.info(f'Tile downloaded into : {laz_filepath}')
-    # else:
-    #     logger.info(f'Tile n°{INDEX_TILE_IGN} is already downloaded at {laz_filepath}')
-
-
-    # .laz to .ply
-    folder_data_cloudpoint_ply = 'data/point_cloud/ply/'
-    ply_filename = f'decimation-{str(PERCENTAGE_POINT_TO_REMOVE)}---{filename_tile.split('.')[0]}.ply'
-    ply_filepath = folder_data_cloudpoint_ply + ply_filename
-
-    if not os.path.isfile(ply_filepath):
-        logger.info(f'Transformation .laz --> .ply  |  {laz_filepath} --> {ply_filepath}')
-        xyz = laz_to_numpy(laz_filepath)
-        xyz_decimated = decimate_array(xyz, PERCENTAGE_POINT_TO_REMOVE)
-        logger.info(f'Decimation done. Number of points : {xyz.shape[0]} (before) | {xyz_decimated.shape[0]} (after)')
-        numpy_to_ply(xyz_decimated, ply_filepath)
-        logger.info(f'Transformation .laz --> .ply done')
-        if SHOW_CLOUDPOINT: show_point_cloud(xyz_decimated)
-    else:
-        logger.info(f'File {ply_filepath} already exists.')
-
-    
-    # .ply point cloud to .stl mesh with delaunay 2D  (don't work with too much point)
-    if DO_DELAUNAY:
-        mesh_folder = 'data/mesh/'
-        mesh_filename = f'delaunay---{ply_filename.split('.')[0]}.stl'
-        mesh_filepath = mesh_folder + mesh_filename
-        mesh = xyz_to_mesh(ply_filepath, mesh_filepath)
-
-    # .ply point cloud to .ply mesh with ball pivoting
-    if DO_BALL_PIVOTING:
-        avg_radius = 4
-        mesh_filename = f'ball_pivot--avg_radius-{avg_radius}---{ply_filename}'
-        mesh_filepath = mesh_folder + mesh_filename
-        ply_pointcloud_to_ply_mesh_ball_pivoting(ply_filepath, mesh_filepath, avg_radius)
-        display_ply_mesh(mesh_filepath)
-
-    
-    # .ply point cloud to .ply mesh with poisson
+    # Point cloud to mesh (.ply -> .ply) with poisson method
     if DO_POISSON:
         depth = 10              # more = more detail & slower                                       -> Maximum depth of the tree that will be used for surface reconstruction. Running at depth d corresponds to solving on a grid whose resolution is no larger than 2^d x 2^d x 2^d. Note that since the reconstructor adapts the octree to the sampling density, the specified reconstruction depth is only an upper bound.
         width = 0.0             # more = more/equal details & more outside anomalies                -> Specifies the target width of the finest level octree cells. This parameter is ignored if depth is specified
