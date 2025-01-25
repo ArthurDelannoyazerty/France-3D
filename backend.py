@@ -46,9 +46,14 @@ def send_available_tiles():
     """
     Send the GeoJSON data to the client when requested.
     """
-    gdf = gpd.read_file('data/geojson/all_tiles/all_tiles.geojson')
+    print('Loading geojson file')
+    gdf = gpd.read_file('data/data_grille/all_tiles_available_merged.geojson')
+    
+    print('Transformation crs')
     gdf = gdf.set_crs('EPSG:2154', allow_override=True)
     gdf = geodataframe_from_ign_to_leaflet(gdf)
+
+    print('Transformation Geojson to json')
     geojson_data = gdf.to_json()
 
     print(f'Sending geojson all tiles to {request.sid}')

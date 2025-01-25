@@ -34,8 +34,7 @@ def init_folders():
     Path('data/point_cloud/laz/' ).mkdir(parents=True, exist_ok=True)
     Path('data/point_cloud/ply/' ).mkdir(parents=True, exist_ok=True)
     Path('data/mesh'             ).mkdir(parents=True, exist_ok=True)
-    Path('data/geojson/order'    ).mkdir(parents=True, exist_ok=True)
-    Path('data/geojson/all_tiles').mkdir(parents=True, exist_ok=True)
+    Path('data/orders'           ).mkdir(parents=True, exist_ok=True)
 
 
 def geodataframe_from_leaflet_to_ign(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -53,20 +52,46 @@ def download_ign_available_tiles(output_filepath:str, force_download:bool=False)
     # If file already exists and no force, then do not download file
     if os.path.isfile(output_filepath) and not force_download: return
 
-    # Define the WFS URL
-    wfs_url = (
-        "https://data.geopf.fr/private/wfs/"
-        "?service=WFS&version=2.0.0&apikey=interface_catalogue"
-        "&request=GetFeature&typeNames=IGNF_LIDAR-HD_TA:nuage-dalle&outputFormat=application/json"
-    )
+    wfs_url = "https://data.geopf.fr/private/wfs/?service=WFS&version=2.0.0&apikey=interface_catalogue&request=GetFeature&typeNames=IGNF_LIDAR-HD_TA:nuage-dalle&outputFormat=application/json"
+    
+    # First request to initialize the geojson and know the total number of features
+    logger.info('First download for all features available')
     response = requests.get(wfs_url)
-    if response.status_code == 200:
-        data = response.json()
-        with open(output_filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        logger.info(f"Data successfully downloaded and saved to {output_filepath}")
-    else:
-        logger.info(f"Failed to retrieve data. HTTP Status code: {response.status_code}")
+    if response.status_code != 200:
+        logger.info(f"Failed to retrieve data for rul : {wfs_url}. HTTP Status code: {response.status_code}")
+        exit(1)
+    
+    geojson = response.json()
+    total_features = geojson['totalFeatures']
+    number_returned = geojson['numberReturned']
+    logger.info(f'First download finished. Total Feature : {total_features}  | Number Returned : {number_returned}')
+
+    start_index = number_returned
+    while start_index<total_features:
+        logger.info(f'Downloading features from index {start_index} / {total_features}')
+        wfs_url_indexed = f'{wfs_url}&startIndex={start_index}'
+        response = requests.get(wfs_url_indexed)
+        if response.status_code != 200:
+            logger.info(f"Failed to retrieve data for rul : {wfs_url_indexed}. HTTP Status code: {response.status_code}")
+            exit(1)
+        response = response.json()
+        current_features = response['features']
+        geojson['features'].extend(current_features)
+        number_returned = geojson['numberReturned']
+        start_index += number_returned
+    
+    with open(output_filepath, 'w', encoding='utf-8') as f:
+            json.dump(geojson, f, indent=4, ensure_ascii=False)
+
+
+def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str):
+    logger.info(f'Merging all tiles from geojson : {geojson_filepath}')
+    gdf = gpd.read_file(geojson_filepath)
+    merged_gdf = unary_union(gdf.geometry)
+    merged_gdf_dict = mapping(merged_gdf)
+    with open(merged_geojson_filepath, 'w') as f:
+        f.write(json.dumps(merged_gdf_dict))
+    logger.info(f'Merged geojson saved at {merged_geojson_filepath}')
 
 
 def laz_to_numpy(filepath_in) -> np.ndarray:
@@ -115,7 +140,7 @@ def decimate_array(array:np.ndarray, percentage_to_remove):
     return array[mask]
 
 
-def show_point_cloud(points):
+def display_point_cloud(points):
     """
     Display a 3D point cloud using PyVista.
     
@@ -129,30 +154,6 @@ def show_point_cloud(points):
     plotter.set_background("white")
     plotter.show()
 
-
-def ply_pointcloud_to_ply_mesh_ball_pivoting(ply_pointcloud_filepath:str, ply_mesh_filepath:str, avg_radius:float):
-    logger.info('Begin operation point cloud to mesh with ball pivoting method.')
-    # Load the point cloud
-    pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
-
-    # Estimate normals
-    pcd.estimate_normals()
-    logger.info('Estimated normals done')
-
-    # Compute average distance between points
-    distances = pcd.compute_nearest_neighbor_distance()
-    avg_dist = np.mean(distances)
-    radius = avg_radius * avg_dist
-    logger.info('Distances nearest neighbors done')
-
-    # point cloud to mesh
-    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-        pcd,
-        o3d.utility.DoubleVector([radius, radius*2])
-    )
-
-    # Save the mesh
-    o3d.io.write_triangle_mesh(ply_mesh_filepath, mesh)
 
 
 def ply_pointcloud_to_ply_mesh_poisson(ply_pointcloud_filepath:str, 
@@ -214,23 +215,27 @@ def download_tiles_order(geojson_order_filepath:str):
     pass
 
 
+
+
+
 if __name__=="__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
 
 
+    FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
     PERCENTAGE_POINT_TO_REMOVE = 25
     SHOW_CLOUDPOINT = False
-    DO_DELAUNAY = False
-    DO_BALL_PIVOTING = False
     DO_POISSON = True
     
     
     # Init folder tree if not existing
     init_folders()
 
-    filepath_all_tiles_geojson = 'data/data_grille/geojson_tiles_available.geojson'
-    download_ign_available_tiles(filepath_all_tiles_geojson)
+    filepath_all_tiles_geojson        = 'data/data_grille/all_tiles_available.geojson'
+    filepath_all_tiles_geojson_merged = 'data/data_grille/all_tiles_available_merged.geojson'
+    download_ign_available_tiles(filepath_all_tiles_geojson, force_download=FORCE_DOWNLOAD_ALL_TILES_AVAILABLE)
+    merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
     exit(0)
     # # Download zip if it doesn't exists
