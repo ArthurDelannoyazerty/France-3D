@@ -1,0 +1,2 @@
+- ajouter calcul pourcentaged decimation selon taille de la zone de selection
+- Renvoyer le mesh a l'utilisateur
