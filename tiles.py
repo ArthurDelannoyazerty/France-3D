@@ -211,10 +211,29 @@ def display_ply_mesh(mesh_filepath:str):
     o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True)
 
 
-def download_tiles_order(geojson_order_filepath:str):
-    pass
+def get_gdf_for_order(geojson_order_filepath:str, geojson_all_tiles_available_filepath:str) -> gpd.GeoDataFrame:
+    logger.info('Loading geojson of all tiles available')
+    available_tiles_gdf = gpd.read_file(geojson_all_tiles_available_filepath)
+    
+    logger.info('Loading geojson orders')
+    order_gdf = gpd.read_file(geojson_order_filepath)
+    logger.info(f'Order geojson head : {order_gdf.head()}')
+
+    logger.info('Filtering the interescting tiles')
+    intersect_gdf = available_tiles_gdf[available_tiles_gdf.intersects(order_gdf.geometry.iloc[0])]
+    logger.info(f'Intersect GeoDataFrame head : {intersect_gdf.head()}')
+    return intersect_gdf
 
 
+def download_tiles_from_gdf(gdf:gpd.GeoDataFrame):
+    logger.info('Download .laz tiles')
+    for index, row in gdf.iterrows():
+        filename = row['name']
+        url = row['url']
+        filepath = laz_file + filename
+        if not os.path.isfile(filepath):
+            logger.info(f'Downloading file {filename} into {filepath}')
+            wget.download(url, out=filepath)
 
 
 
@@ -232,10 +251,19 @@ if __name__=="__main__":
     # Init folder tree if not existing
     init_folders()
 
+    # Download and merge all tiles availables
     filepath_all_tiles_geojson        = 'data/data_grille/all_tiles_available.geojson'
     filepath_all_tiles_geojson_merged = 'data/data_grille/all_tiles_available_merged.geojson'
-    download_ign_available_tiles(filepath_all_tiles_geojson, force_download=FORCE_DOWNLOAD_ALL_TILES_AVAILABLE)
-    merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
+    if FORCE_DOWNLOAD_ALL_TILES_AVAILABLE : 
+        download_ign_available_tiles(filepath_all_tiles_geojson)
+        merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
+
+    
+    order_filepath = 'data/orders/1737766321--g8sn5PjfAFUe11jrAAAB.geojson'
+    gdf_intersect = get_gdf_for_order(order_filepath , filepath_all_tiles_geojson)
+
+    laz_file = 'data/point_cloud/laz/'
+    download_tiles_from_gdf(gdf_intersect)
 
     exit(0)
     # # Download zip if it doesn't exists

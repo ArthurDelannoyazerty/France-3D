@@ -10,8 +10,7 @@ from tiles import geodataframe_from_leaflet_to_ign, geodataframe_from_ign_to_lea
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-gpkg_folder = 'data/geojson/order/'
-GEOJSON_PRETTY_PRINT = True
+gpkg_folder = 'data/orders/'
 
 
 @app.route('/')
@@ -25,10 +24,7 @@ def handle_geometry(geojson):
         output_file = f'{int(datetime.now().timestamp())}--{request.sid}.geojson'
         output_filepath = gpkg_folder + output_file
         with open(output_filepath, 'w') as f:
-            if GEOJSON_PRETTY_PRINT:
-                f.write(json.dumps(json.loads(geojson), indent=1))
-            else:
-                f.write(geojson)
+            f.write(geojson)
         print(f"GeoPackage saved: {output_file}")
 
         # Load, change crs and save again
