@@ -90,19 +90,18 @@ def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str
     logger.info(f'Merged geojson saved at {merged_geojson_filepath}')
 
 
-def laz_to_numpy(filepath_in) -> np.ndarray:
-    logger.info('Transforming .laz into numpy array.')
-    return laspy.read(filepath_in).xyz
+def numpy_to_laz(xyz:np.ndarray, old_laz_file:laspy.LasData, laz_filepath_out:str):
+    logger.info(f'Saving point into laz at location {laz_filepath_out}')
+    # Create new laz file with old laz header
+    header = laspy.LasHeader(point_format=old_laz_file.header.point_format, version=old_laz_file.header.version)
+    output_las = laspy.LasData(header)
 
+    # Copy the points to the new file
+    output_las.x = xyz[:, 0]
+    output_las.y = xyz[:, 1]
+    output_las.z = xyz[:, 2]
+    output_las.write(laz_filepath_out)
 
-def numpy_to_ply(xyz:np.ndarray, filepath_out:str):
-    logger.info('Transforming numpy array into a .ply file')
-    # Create an Open3D point cloud object
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz)
-
-    # Save the point cloud to a .ply file
-    o3d.io.write_point_cloud(filepath_out, pcd)
 
 
 def decimate_array(array:np.ndarray, percentage_to_remove):
@@ -128,7 +127,7 @@ def decimate_array(array:np.ndarray, percentage_to_remove):
     return decimated_array
 
 
-def display_point_cloud(points):
+def display_point_cloud(points:np.ndarray):
     """
     Display a 3D point cloud using PyVista.
     
@@ -200,7 +199,7 @@ if __name__=="__main__":
 
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
     PERCENTAGE_POINT_TO_REMOVE = 0
-    SHOW_CLOUDPOINT = False
+    SHOW_CLOUDPOINT = True
     
     
     # Init folder tree if not existing
@@ -231,14 +230,15 @@ if __name__=="__main__":
     download_tiles_from_gdf(gdf_intersect, laz_folderpath)
     
     # point cloud .laz to .ply + point decimation + point filtering by user zone selection
-    ply_filepath = order_filepath + 'point_cloud.ply'
-    if not os.path.isfile(ply_filepath):
+    filtered_point_cloud_filepath = order_filepath + 'filtered_point_cloud.laz'
+    if not os.path.isfile(filtered_point_cloud_filepath):
         polygon = gpd.read_file(order_zone_filepath).iloc[0].geometry
         list_intersecting_tiles_filename = list(gdf_intersect['name'])
         merged_xyz = list()
         for tile_filename in list_intersecting_tiles_filename:
             tile_filepath = laz_folderpath + tile_filename
-            xyz = laz_to_numpy(tile_filepath)
+            complete_laz_file = laspy.read(tile_filepath)
+            xyz = complete_laz_file.xyz
             xyz = decimate_array(xyz, PERCENTAGE_POINT_TO_REMOVE)
             filtered_array = filter_points_by_polygon(xyz, polygon)
             if SHOW_CLOUDPOINT:
@@ -246,8 +246,14 @@ if __name__=="__main__":
                 display_point_cloud(filtered_array)
             merged_xyz.append(filtered_array)
         merged_xyz = np.array(merged_xyz).squeeze()
-        numpy_to_ply(merged_xyz, ply_filepath)
+        numpy_to_laz(xyz=merged_xyz, old_laz_file=complete_laz_file, laz_filepath_out=filtered_point_cloud_filepath)
+
+
+    if SHOW_CLOUDPOINT:
+        filtered_laz = laspy.read(filtered_point_cloud_filepath)
+        xyz = filtered_laz.xyz
+        display_point_cloud(xyz)
 
     # Point cloud to mesh
-    mesh_filepath = order_filepath + 'mesh.stl'
-    meshlib_terrain_point_cloud_to_mesh(ply_filepath, mesh_filepath)
+    # mesh_filepath = order_filepath + 'mesh.stl'
+    # meshlib_terrain_point_cloud_to_mesh(ply_filepath, mesh_filepath)
