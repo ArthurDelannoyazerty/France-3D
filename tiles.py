@@ -93,7 +93,7 @@ def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str
 def numpy_to_laz(xyz:np.ndarray, old_laz_file:laspy.LasData, laz_filepath_out:str):
     logger.info(f'Saving point into laz at location {laz_filepath_out}')
     # Create new laz file with old laz header
-    header = laspy.LasHeader(point_format=old_laz_file.header.point_format, version=old_laz_file.header.version)
+    header = laspy.LasHeader(point_format=old_laz_file.header.point_format, version=old_laz_file.header.version).c
     output_las = laspy.LasData(header)
 
     # Copy the points to the new file
