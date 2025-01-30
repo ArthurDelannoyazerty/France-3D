@@ -4,7 +4,8 @@ import os
 import laspy
 import requests
 import json
-import meshlib
+import meshlib.mrmeshnumpy
+import meshlib.mrmeshpy
 import numpy as np
 import pyvista as pv
 import open3d as o3d
@@ -177,7 +178,7 @@ def filter_points_by_polygon(xyz, polygon):
     return filtered_points
 
 
-def meshlib_terrain_point_cloud_to_mesh(ply_pointcloud_filepath:str, mesh_filepath:str):
+def meshlib_terrain_point_cloud_to_mesh(ply_pointcloud_filepath:str, mesh_filepath:str, smoothing:int=2):
     logger.info('Beginning Point cloud to mesh')
     pcd = o3d.io.read_point_cloud(ply_pointcloud_filepath)
     xyz = np.asarray(pcd.points) 
@@ -188,7 +189,11 @@ def meshlib_terrain_point_cloud_to_mesh(ply_pointcloud_filepath:str, mesh_filepa
     mesh = meshlib.mrmeshpy.terrainTriangulation(vector_3d)
 
     logger.info('Remeshing')
-    meshlib.mrmeshpy.remesh(mesh, meshlib.mrmeshpy.RemeshSettings())
+    relax_params = meshlib.mrmeshpy.MeshRelaxParams()
+    relax_params.iterations = smoothing  # Number of smoothing iterations
+
+    # Apply the relaxation (smoothing) to the mesh
+    meshlib.mrmeshpy.relax(mesh, relax_params)
     meshlib.mrmeshpy.saveMesh(mesh, mesh_filepath)
 
 
@@ -214,7 +219,7 @@ if __name__=="__main__":
         merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
 
-    order_name = '1737817398--5XgZhio-_bDeS4AqAAAB'
+    order_name = '1738278811--60aLvBtgMYwObRF1AAAB'
     orders_folder  = 'data/orders/'
     laz_folderpath = 'data/point_cloud/laz/'
     order_filepath      = orders_folder + order_name + '/'
@@ -223,7 +228,7 @@ if __name__=="__main__":
 
     # Do the intersection if not already done
     if not os.path.isfile(order_intersects):
-        gdf_intersect = get_intersecting_tiles_from_order(order_filepath , filepath_all_tiles_geojson)
+        gdf_intersect = get_intersecting_tiles_from_order(order_zone_filepath , filepath_all_tiles_geojson)
         gdf_intersect.to_file(order_intersects)
     
     # Download the non downloaded tiles
@@ -249,5 +254,6 @@ if __name__=="__main__":
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
+    smoothing_iteration = 2
     mesh_filepath = order_filepath + 'mesh.stl'
-    meshlib_terrain_point_cloud_to_mesh(ply_filepath, mesh_filepath)
+    meshlib_terrain_point_cloud_to_mesh(ply_filepath, mesh_filepath, smoothing=smoothing_iteration)
