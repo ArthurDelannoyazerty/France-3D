@@ -204,7 +204,7 @@ if __name__=="__main__":
 
 
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
-    PERCENTAGE_POINT_TO_REMOVE = 0
+    PERCENTAGE_POINT_TO_REMOVE = 33
     SHOW_CLOUDPOINT = False
     
     
@@ -219,7 +219,7 @@ if __name__=="__main__":
         merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
 
-    order_name = '1738278811--60aLvBtgMYwObRF1AAAB'
+    order_name = '1738280583--dA7XXUF3qlBSoJiZAAAB'
     orders_folder  = 'data/orders/'
     laz_folderpath = 'data/point_cloud/laz/'
     order_filepath      = orders_folder + order_name + '/'
@@ -250,7 +250,7 @@ if __name__=="__main__":
                 display_point_cloud(xyz)
                 display_point_cloud(filtered_array)
             merged_xyz.append(filtered_array)
-        merged_xyz = np.array(merged_xyz).squeeze()
+        merged_xyz = np.vstack(merged_xyz)
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
