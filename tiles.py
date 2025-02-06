@@ -91,11 +91,6 @@ def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str
     logger.info(f'Merged geojson saved at {merged_geojson_filepath}')
 
 
-def laz_to_numpy(filepath_in) -> np.ndarray:
-    logger.info('Transforming .laz into numpy array.')
-    return laspy.read(filepath_in).xyz
-
-
 def numpy_to_ply(xyz:np.ndarray, filepath_out:str):
     logger.info('Transforming numpy array into a .ply file')
     # Create an Open3D point cloud object
@@ -174,7 +169,7 @@ def filter_points_by_polygon(xyz, polygon):
     logger.info(f'Filtering {xyz.shape[0]} points with the polygon {polygon}')
     inside_mask = contains(polygon, xyz[:, 0], xyz[:, 1])
     filtered_points = xyz[inside_mask]
-    logger.info(f'Points filtered. {xyz.shape[0]} --> {filtered_points.shape[0]} ({filtered_points.shape[0]/xyz.shape[0]} %)')
+    logger.info(f'Points filtered. {xyz.shape[0]} --> {filtered_points.shape[0]} (Keeping {filtered_points.shape[0]/xyz.shape[0]} %)')
     return filtered_points
 
 
@@ -204,8 +199,39 @@ if __name__=="__main__":
 
 
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
-    PERCENTAGE_POINT_TO_REMOVE = 33
+    FORCE_LAZ_TO_PLY = True
+    PERCENTAGE_POINT_TO_REMOVE = 50
     SHOW_CLOUDPOINT = False
+
+    points_class_str_to_int = {
+        'No Class':                      1,
+        'Ground':                        2,
+        'Small Vegetation (0-50cm)':     3,
+        'Medium Vegetation (50-150 cm)': 4,
+        'High Vegeration (+150 cm)':     5,
+        'Building':                      6,
+        'Water':                         9,
+        'Bridge':                        17,
+        'Perennial Soil':                64,
+        'Virtual Points':                66,
+        'Miscellaneous':                 67,
+    }
+
+    points_class_int_to_str = {
+        1  : 'No Class',
+        2  : 'Ground',
+        3  : 'Small Vegetation (0-50cm)',
+        4  : 'Medium Vegetation (50-150 cm)',
+        5  : 'High Vegeration (+150 cm)',
+        6  : 'Building',
+        9  : 'Water',
+        17 : 'Bridge',
+        64 : 'Perennial Soil',
+        66 : 'Virtual Points',
+        67 : 'Miscellaneous',
+    }
+
+    choosen_point_class = [1, 2, 3, 4, 6, 17, 64]
     
     
     # Init folder tree if not existing
@@ -237,20 +263,35 @@ if __name__=="__main__":
     
     # point cloud .laz to .ply + point decimation + point filtering by user zone selection
     ply_filepath = order_filepath + 'point_cloud.ply'
-    if not os.path.isfile(ply_filepath):
+    if not os.path.isfile(ply_filepath) or FORCE_LAZ_TO_PLY:
         polygon = gpd.read_file(order_zone_filepath).iloc[0].geometry
         list_intersecting_tiles_filename = list(gdf_intersect['name'])
         merged_xyz = list()
         for tile_filename in list_intersecting_tiles_filename:
             tile_filepath = laz_folderpath + tile_filename
-            xyz = laz_to_numpy(tile_filepath)
-            xyz = decimate_array(xyz, PERCENTAGE_POINT_TO_REMOVE)
+
+            # Laz -> numpy   +   Remove unwanted points
+            las = laspy.read(tile_filepath)
+            choosen_xyz = np.empty((0,3))
+            for point_class in choosen_point_class:
+                las_points = las.points[las.classification == point_class]
+                x = las_points.x.array
+                y = las_points.y.array
+                z = las_points.z.array
+                xyz = np.vstack([x,y,z]).T * las_points.scales   # Merged the coordinates into a (n,3) array and rescale them
+                choosen_xyz = np.vstack([choosen_xyz, xyz])
+
+            # Decimation of class-filtered points of the current tile
+            xyz = decimate_array(choosen_xyz, PERCENTAGE_POINT_TO_REMOVE)
             filtered_array = filter_points_by_polygon(xyz, polygon)
+            merged_xyz.append(filtered_array)                           # Merge the processed tile with the other tiles
+
             if SHOW_CLOUDPOINT:
                 display_point_cloud(xyz)
                 display_point_cloud(filtered_array)
-            merged_xyz.append(filtered_array)
+        # Save all the needed points
         merged_xyz = np.vstack(merged_xyz)
+        merged_xyz = merged_xyz - merged_xyz[0]     # Center the point cloud on (0,0,0)
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
