@@ -16,7 +16,7 @@ orders_folder = 'data/orders/'
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index2.html')
 
 @socketio.on('send_geometry')
 def handle_geometry(geojson_str):
