@@ -245,7 +245,7 @@ if __name__=="__main__":
         merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
 
-    order_name = '1738280583--dA7XXUF3qlBSoJiZAAAB'
+    order_name = '1739534558--1ZmQ9kF02LO6c9TLAAAB'
     orders_folder  = 'data/orders/'
     laz_folderpath = 'data/point_cloud/laz/'
     order_filepath      = orders_folder + order_name + '/'
