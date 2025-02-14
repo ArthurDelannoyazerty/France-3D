@@ -1,13 +1,13 @@
 import numpy as np
 from stl import mesh
 
-def load_and_extrude_stl(input_file, output_file):
+def load_and_extrude_stl(input_file, output_file, offset_z):
     # 1. Load the original STL mesh
     original_mesh = mesh.Mesh.from_file(input_file)
     
     # 2. Determine the minimum z value among all vertices in the original mesh
     #    original_mesh.vectors has shape (n_triangles, 3, 3)
-    min_z = original_mesh.vectors[:, :, 2].min()
+    min_z = original_mesh.vectors[:, :, 2].min() - offset_z
     
     # 3. Extract all vertices from the triangle soup and obtain unique vertices.
     #    Reshape the (n_triangles, 3, 3) array into (-1, 3) and then use np.unique.
@@ -79,4 +79,4 @@ def load_and_extrude_stl(input_file, output_file):
 if __name__ == '__main__':
     input_stl = 'data/orders/1739534558--1ZmQ9kF02LO6c9TLAAAB/mesh.stl'         # Path to your input STL file
     output_stl = 'extruded.stl'     # Path for the output (volumized) STL file
-    load_and_extrude_stl(input_stl, output_stl)
+    load_and_extrude_stl(input_stl, output_stl, 10)
