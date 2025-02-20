@@ -23,7 +23,7 @@ def handle_geometry(geojson_str):
     try:
         # Transform the string of geojson into a GeoDataFrame ovject
         geojson_dict = json.loads(geojson_str)
-        geometry = geojson_dict["features"][0]["geometry"]
+        geometry = geojson_dict['zone']["features"][0]["geometry"]
         geojson_data = [{"geometry": shape(geometry)}]
         gdf = gpd.GeoDataFrame.from_dict(geojson_data)
 
