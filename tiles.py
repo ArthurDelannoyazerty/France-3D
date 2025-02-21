@@ -274,9 +274,10 @@ if __name__=="__main__":
 
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
     FORCE_LAZ_TO_PLY = True
-    PERCENTAGE_POINT_TO_REMOVE = 50
+    PERCENTAGE_POINT_TO_REMOVE = 97.5
     SHOW_CLOUDPOINT = False
     Z_OFFSET = 10
+    SMOOTHING_ITERATION = 0
 
     points_class_str_to_int = {
         'No Class':                      1,
@@ -306,7 +307,7 @@ if __name__=="__main__":
         67 : 'Miscellaneous',
     }
 
-    choosen_point_class = [1, 2, 3, 4, 6, 17, 64]
+    choosen_point_class = [1, 2, 6, 17, 64]
     
     
     # Init folder tree if not existing
@@ -320,7 +321,7 @@ if __name__=="__main__":
         merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
 
 
-    order_name = '1739537467--Z_nNCmqPFAm6AoC2AAAB'
+    order_name = '1740049010--DCls_U0AYq9RhS6-AAAB'
     orders_folder  = 'data/orders/'
     laz_folderpath = 'data/point_cloud/laz/'
     order_filepath      = orders_folder + order_name + '/'
@@ -370,9 +371,8 @@ if __name__=="__main__":
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
-    smoothing_iteration = 2
     surface_mesh_filepath = order_filepath + 'surface_mesh.stl'
-    meshlib_terrain_point_cloud_to_surface_mesh(ply_filepath, surface_mesh_filepath, smoothing=smoothing_iteration)
+    meshlib_terrain_point_cloud_to_surface_mesh(ply_filepath, surface_mesh_filepath, smoothing=SMOOTHING_ITERATION)
 
     final_mesh_filepath = order_filepath + 'final_mesh.stl'
     add_base_to_surface_mesh(surface_mesh_filepath, final_mesh_filepath, Z_OFFSET)
