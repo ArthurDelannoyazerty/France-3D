@@ -40,7 +40,6 @@ def index():
 @socketio.on('send_geometry')
 def handle_geometry(geojson_str):
     try:
-        
         # Transform the string of geojson into a GeoDataFrame ovject
         order_dict = json.loads(geojson_str)
         geometry = order_dict['geojson']["features"][0]["geometry"]
@@ -55,11 +54,11 @@ def handle_geometry(geojson_str):
         order_dict['geojson'] = gdf_json
         
         # Create paths
-        orders_folder = 'data/orders/'
-        order_id = str(int(datetime.now().timestamp())) + '--' + str(request.sid)
-        output_filename = 'order.json'
-        order_folder = orders_folder + order_id 
-        order_filepath = order_folder + '/' + output_filename
+        orders_folder   = Path('data/orders/')
+        order_id        = Path(str(int(datetime.now().timestamp())) + '--' + str(request.sid))
+        output_filename = Path('order.json')
+        order_folder   = orders_folder / order_id 
+        order_filepath = order_folder / output_filename
 
         # Create folder for the current order (after the transformation operation because not created if an error occurs)
         Path(order_folder).mkdir(parents=True, exist_ok=True)
@@ -67,9 +66,10 @@ def handle_geometry(geojson_str):
             f.write(json.dumps(order_dict))
 
         socketio.emit('alert', f'The order {order_id} have been received.')
-        process_order(order_folder + '/')
+        process_order(order_folder)
     except Exception as e:
-        print(f"Error processing geometry: {e}")
+        socketio.emit('user_info_update_unsafe', f'<p style="color:red;">An error happenned during the order process.</p>')
+        logger.exception(f'An error happened during the process of the order {order_id}')
 
 
 @socketio.on("request_available_tiles")
@@ -93,24 +93,25 @@ def send_available_tiles():
 
 
 # PROCESS ------------------------------------------------------------------------------
-def process_order(order_folderpath:str):
+def process_order(order_folderpath:Path):
     socketio.emit('user_info_update', f'Initialize the order.')
     FORCE_LAZ_TO_PLY = True
     Z_OFFSET = 10
 
-    with open(order_folderpath + '/order.json', 'r') as f:
+    order_filepath = order_folderpath / 'order.json'
+    with open(order_filepath, 'r') as f:
         dict_order = json.load(f)
 
     choosen_point_class        = dict_order['point_class']
     percentage_point_to_remove = dict_order['points_to_remove']
     smoothing_iteration        = dict_order['smoothing']
 
-    laz_folderpath = 'data/raw_point_cloud/'
-    order_zone_filepath   = order_folderpath + 'order.json'
-    order_intersects      = order_folderpath + 'tiles_intersect.geojson'
-    ply_filepath          = order_folderpath + 'point_cloud.ply'
-    surface_mesh_filepath = order_folderpath + 'surface_mesh.stl'
-    final_mesh_filepath   = order_folderpath + 'final_mesh.stl'
+    laz_folderpath = Path('data/raw_point_cloud/')
+    order_zone_filepath   = order_folderpath / 'order.json'
+    order_intersects      = order_folderpath / 'tiles_intersect.geojson'
+    ply_filepath          = order_folderpath / 'point_cloud.ply'
+    surface_mesh_filepath = order_folderpath / 'surface_mesh.stl'
+    final_mesh_filepath   = order_folderpath / 'final_mesh.stl'
 
     # Do the intersection if not already done
     if not os.path.isfile(order_intersects):
@@ -125,12 +126,12 @@ def process_order(order_folderpath:str):
     
     # point cloud .laz to .ply + point decimation + point filtering by user zone selection
     if not os.path.isfile(ply_filepath) or FORCE_LAZ_TO_PLY:
-        socketio.emit('user_info_update', f'Create the custom cloud point from IGN products (May take time. Check console for downloads status).')
+        socketio.emit('user_info_update', f'Create the custom cloud point from IGN products (May take time. Check console for status).')
         polygon = gpd.read_file(order_zone_filepath).iloc[0].geometry
         list_intersecting_tiles_filename = list(gdf_intersect['name'])
         merged_xyz = list()
         for tile_filename in list_intersecting_tiles_filename:
-            tile_filepath = laz_folderpath + tile_filename
+            tile_filepath = laz_folderpath / tile_filename
 
             # Laz -> numpy   +   Remove unwanted points
             las = laspy.read(tile_filepath)
@@ -153,9 +154,12 @@ def process_order(order_folderpath:str):
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
-    socketio.emit('user_info_update', f'Create the mesh from the cloud point (May take time. Check console for downloads status).')
+    socketio.emit('user_info_update', f'Create the mesh from the cloud point (May take time. Check console for status).')
     meshlib_terrain_point_cloud_to_surface_mesh(ply_filepath, surface_mesh_filepath, smoothing=smoothing_iteration)
     add_base_to_surface_mesh(surface_mesh_filepath, final_mesh_filepath, Z_OFFSET)
+
+    full_final_mesh_path = Path(os.path.dirname(os.path.abspath(__file__))) / final_mesh_filepath
+    socketio.emit('user_info_update_unsafe', f'Your file is ready at : <a href="file:///{full_final_mesh_path}" target="_blank">{full_final_mesh_path}</a>.')
 
 
 if __name__ == '__main__':
@@ -167,8 +171,8 @@ if __name__ == '__main__':
 
     # Download and merge all tiles availables
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
-    filepath_all_tiles_geojson         = 'data/data_grille/all_tiles_available.geojson'
-    filepath_all_tiles_geojson_merged  = 'data/data_grille/all_tiles_available_merged.geojson'
+    filepath_all_tiles_geojson         = Path('data/data_grille/all_tiles_available.geojson')
+    filepath_all_tiles_geojson_merged  = Path('data/data_grille/all_tiles_available_merged.geojson')
     download_ign_available_tiles(filepath_all_tiles_geojson, FORCE_DOWNLOAD_ALL_TILES_AVAILABLE)
     merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged, FORCE_DOWNLOAD_ALL_TILES_AVAILABLE)
 

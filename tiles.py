@@ -28,9 +28,9 @@ crs_ign =     'EPSG:2154'
 
 def init_folders():
     logger.info('Create folders for the project')
-    Path('data/data_grille'   ).mkdir(parents=True, exist_ok=True)
-    Path('data/orders'        ).mkdir(parents=True, exist_ok=True)
-    Path('data/rw_point_cloud').mkdir(parents=True, exist_ok=True)
+    Path('data/data_grille'    ).mkdir(parents=True, exist_ok=True)
+    Path('data/orders'         ).mkdir(parents=True, exist_ok=True)
+    Path('data/raw_point_cloud').mkdir(parents=True, exist_ok=True)
 
 
 def geodataframe_from_leaflet_to_ign(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -155,11 +155,11 @@ def get_intersecting_tiles_from_order(geojson_order_filepath:str, geojson_all_ti
     return intersect_gdf
 
 
-def download_tiles_from_gdf(gdf:gpd.GeoDataFrame, laz_folderpath:str):
+def download_tiles_from_gdf(gdf:gpd.GeoDataFrame, laz_folderpath:Path):
     for index, row in gdf.iterrows():
         filename = row['name']
         url = row['url']
-        filepath = laz_folderpath + filename
+        filepath = laz_folderpath / filename
         if not os.path.isfile(filepath):
             logger.info(f'Downloading file {filename} into {filepath}')
             wget.download(url, out=filepath)
@@ -258,115 +258,3 @@ def add_base_to_surface_mesh(input_file, output_file, z_offset):
     logger.info(f'Is final mesh closed: {mesh.Mesh.is_closed(new_mesh)}')
     new_mesh.save(output_file)
     logger.info(f"Extruded mesh saved to {output_file}")
-
-
-
-if __name__=="__main__":
-    setup_logging()
-    logger = logging.getLogger(__name__)
-
-
-    FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False
-    FORCE_LAZ_TO_PLY = True
-    PERCENTAGE_POINT_TO_REMOVE = 50
-    SHOW_CLOUDPOINT = False
-    Z_OFFSET = 10
-    SMOOTHING_ITERATION = 0
-
-    points_class_str_to_int = {
-        'No Class':                      1,
-        'Ground':                        2,
-        'Small Vegetation (0-50cm)':     3,
-        'Medium Vegetation (50-150 cm)': 4,
-        'High Vegeration (+150 cm)':     5,
-        'Building':                      6,
-        'Water':                         9,
-        'Bridge':                        17,
-        'Perennial Soil':                64,
-        'Virtual Points':                66,
-        'Miscellaneous':                 67,
-    }
-
-    points_class_int_to_str = {
-        1  : 'No Class',
-        2  : 'Ground',
-        3  : 'Small Vegetation (0-50cm)',
-        4  : 'Medium Vegetation (50-150 cm)',
-        5  : 'High Vegeration (+150 cm)',
-        6  : 'Building',
-        9  : 'Water',
-        17 : 'Bridge',
-        64 : 'Perennial Soil',
-        66 : 'Virtual Points',
-        67 : 'Miscellaneous',
-    }
-
-    choosen_point_class = [1, 2, 6, 17, 64]
-    
-    
-    # Init folder tree if not existing
-    init_folders()
-
-    # Download and merge all tiles availables
-    filepath_all_tiles_geojson        = 'data/data_grille/all_tiles_available.geojson'
-    filepath_all_tiles_geojson_merged = 'data/data_grille/all_tiles_available_merged.geojson'
-    if FORCE_DOWNLOAD_ALL_TILES_AVAILABLE : 
-        download_ign_available_tiles(filepath_all_tiles_geojson)
-        merge_all_geojson_features(filepath_all_tiles_geojson, filepath_all_tiles_geojson_merged)
-
-
-    order_name = '1738280583--dA7XXUF3qlBSoJiZAAAB'
-    orders_folder  = 'data/orders/'
-    laz_folderpath = 'data/raw_point_cloud/'
-    order_filepath      = orders_folder + order_name + '/'
-    order_zone_filepath = order_filepath + 'zone.geojson'
-    order_intersects    = order_filepath + 'tiles_intersect.geojson'
-
-    # Do the intersection if not already done
-    if not os.path.isfile(order_intersects):
-        gdf_intersect = get_intersecting_tiles_from_order(order_zone_filepath , filepath_all_tiles_geojson)
-        gdf_intersect.to_file(order_intersects)
-    
-    # Download the non downloaded tiles
-    gdf_intersect = gpd.read_file(order_intersects)
-    download_tiles_from_gdf(gdf_intersect, laz_folderpath)
-    
-    # point cloud .laz to .ply + point decimation + point filtering by user zone selection
-    ply_filepath = order_filepath + 'point_cloud.ply'
-    if not os.path.isfile(ply_filepath) or FORCE_LAZ_TO_PLY:
-        polygon = gpd.read_file(order_zone_filepath).iloc[0].geometry
-        list_intersecting_tiles_filename = list(gdf_intersect['name'])
-        merged_xyz = list()
-        for tile_filename in list_intersecting_tiles_filename:
-            tile_filepath = laz_folderpath + tile_filename
-
-            # Laz -> numpy   +   Remove unwanted points
-            las = laspy.read(tile_filepath)
-            choosen_xyz = np.empty((0,3))
-            for point_class in choosen_point_class:
-                las_points = las.points[las.classification == point_class]
-                x = las_points.x.array
-                y = las_points.y.array
-                z = las_points.z.array
-                xyz = np.vstack([x,y,z]).T * las_points.scales   # Merged the coordinates into a (n,3) array and rescale them
-                choosen_xyz = np.vstack([choosen_xyz, xyz])
-
-            # Decimation of class-filtered points of the current tile
-            xyz = decimate_array(choosen_xyz, PERCENTAGE_POINT_TO_REMOVE)
-            filtered_array = filter_points_by_polygon(xyz, polygon)
-            merged_xyz.append(filtered_array)                           # Merge the processed tile with the other tiles
-
-            if SHOW_CLOUDPOINT:
-                display_point_cloud(xyz)
-                display_point_cloud(filtered_array)
-        # Save all the needed points
-        merged_xyz = np.vstack(merged_xyz)
-        merged_xyz = merged_xyz - merged_xyz[0]     # Center the point cloud on (0,0,0)
-        numpy_to_ply(merged_xyz, ply_filepath)
-
-    # Point cloud to mesh
-    surface_mesh_filepath = order_filepath + 'surface_mesh_convex.stl'
-    meshlib_terrain_point_cloud_to_surface_mesh(ply_filepath, surface_mesh_filepath, smoothing=SMOOTHING_ITERATION)
-
-    final_mesh_filepath = order_filepath + 'final_mesh_convex.stl'
-    add_base_to_surface_mesh(surface_mesh_filepath, final_mesh_filepath, Z_OFFSET)

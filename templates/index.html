@@ -161,6 +161,14 @@
                 element.innerText = data;
             }
         )
+
+        socket.on(
+            'user_info_update_unsafe',
+            function(data) {
+                let element = document.getElementById('user-info-update');
+                element.innerHTML = data;
+            }
+        )
     </script>
 </body>
 </html>
