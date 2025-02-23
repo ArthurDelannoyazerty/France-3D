@@ -169,7 +169,7 @@ def process_order(order_folderpath:Path):
     add_base_to_surface_mesh(surface_mesh_filepath, final_mesh_filepath, Z_OFFSET)
 
     full_final_mesh_path = Path(os.path.dirname(os.path.abspath(__file__))) / final_mesh_filepath
-    socketio.emit('user_info_update_unsafe', f'Your file is ready at : <a href="file:///{full_final_mesh_path}" target="_blank">{full_final_mesh_path}</a>.')
+    socketio.emit('user_info_update_unsafe', f'Your file is ready at : <a href="file:///{full_final_mesh_path}" target="_blank">{full_final_mesh_path}</a>')
 
 
 if __name__ == '__main__':

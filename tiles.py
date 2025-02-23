@@ -162,7 +162,7 @@ def download_tiles_from_gdf(gdf:gpd.GeoDataFrame, laz_folderpath:Path):
         filepath = laz_folderpath / filename
         if not os.path.isfile(filepath):
             logger.info(f'Downloading file {filename} into {filepath}')
-            wget.download(url, out=filepath)
+            wget.download(url, out=str(filepath))
 
 
 def filter_points_by_polygon(xyz, polygon):
