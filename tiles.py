@@ -28,8 +28,9 @@ crs_ign =     'EPSG:2154'
 
 def init_folders():
     logger.info('Create folders for the project')
-    Path('data/data_grille'      ).mkdir(parents=True, exist_ok=True)
-    Path('data/orders'           ).mkdir(parents=True, exist_ok=True)
+    Path('data/data_grille'   ).mkdir(parents=True, exist_ok=True)
+    Path('data/orders'        ).mkdir(parents=True, exist_ok=True)
+    Path('data/rw_point_cloud').mkdir(parents=True, exist_ok=True)
 
 
 def geodataframe_from_leaflet_to_ign(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -314,7 +315,7 @@ if __name__=="__main__":
 
     order_name = '1738280583--dA7XXUF3qlBSoJiZAAAB'
     orders_folder  = 'data/orders/'
-    laz_folderpath = 'data/point_cloud/laz/'
+    laz_folderpath = 'data/raw_point_cloud/'
     order_filepath      = orders_folder + order_name + '/'
     order_zone_filepath = order_filepath + 'zone.geojson'
     order_intersects    = order_filepath + 'tiles_intersect.geojson'
