@@ -4,6 +4,7 @@ import os
 import geopandas as gpd
 import laspy
 import numpy as np
+import osmnx as ox
 
 from pathlib import Path
 from shapely.geometry import shape
@@ -92,6 +93,15 @@ def send_available_tiles():
     print(f'Finished sending all tiles to {request.sid}')
 
 
+@socketio.on('send_city_search')
+def location_string_to_geojson(location_string:str):
+    try:
+        geojson = ox.geocode_to_gdf(location_string).to_json()
+        socketio.emit('add_geojson', geojson)
+    except:
+        socketio.emit('user_info_update_unsafe', f'<p style="color:red;">No result for the search : {location_string}</p>')
+
+
 # PROCESS ------------------------------------------------------------------------------
 def process_order(order_folderpath:Path):
     socketio.emit('user_info_update', f'Initialize the order.')
@@ -168,6 +178,8 @@ if __name__ == '__main__':
 
     # Init folder tree if not existing
     init_folders()
+
+    ox.utils.settings.cache_folder = Path('data/cache')
 
     # Download and merge all tiles availables
     FORCE_DOWNLOAD_ALL_TILES_AVAILABLE = False

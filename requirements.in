@@ -12,3 +12,4 @@ lazrs
 flask-socketio
 meshlib
 shapely
+osmnx

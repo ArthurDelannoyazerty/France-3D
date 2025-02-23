@@ -303,6 +303,53 @@ input[type="range"] {
       document.getElementById('user-info-update').innerHTML = data;
     });
     
+
+
+
+
+    // Function to handle incoming GeoJSON data
+    function addGeoJSONToMap(geojsonData) {
+        // Parse the GeoJSON data if it's a string
+        let parsedData;
+        try {
+            parsedData = typeof geojsonData === 'string' ? JSON.parse(geojsonData) : geojsonData;
+        } catch (error) {
+            console.error('Invalid GeoJSON data:', error);
+            return;
+        }
+
+        drawnItems.clearLayers()
+
+        // Create a GeoJSON layer
+        const geojsonLayer = L.geoJSON(parsedData, {
+            style: {
+                color: 'green', // Set the color to green
+                weight: 2,
+                fillOpacity: 0.3
+            }
+        });
+
+        // Add each layer from the GeoJSON layer to the drawnItems FeatureGroup
+        geojsonLayer.eachLayer(function (layer) {
+            drawnItems.addLayer(layer);
+        });
+
+        // Fit the map's view to the bounds of the GeoJSON layer
+        if (geojsonLayer.getLayers().length > 0) {
+            map.fitBounds(geojsonLayer.getBounds());
+        }
+    }
+
+    // Example usage with a WebSocket receiving GeoJSON data
+    socket.on('add_geojson', function (data) {
+        addGeoJSONToMap(data);
+    });
+
+
+
+
+    
+    
     // Message (search) sending functionality
     const messageInput = document.getElementById('messageInput');
     const sendMessageButton = document.getElementById('send-message');
@@ -317,7 +364,7 @@ input[type="range"] {
     function sendMessage() {
       const message = messageInput.value.trim();
       if (message !== '') {
-        socket.emit('send_message', message);
+        socket.emit('send_city_search', message);
         messageInput.value = '';
       }
     }
