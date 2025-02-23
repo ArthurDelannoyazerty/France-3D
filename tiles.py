@@ -80,7 +80,9 @@ def download_ign_available_tiles(output_filepath:str, force_download:bool=False)
             json.dump(geojson, f, indent=4, ensure_ascii=False)
 
 
-def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str):
+def merge_all_geojson_features(geojson_filepath:str, merged_geojson_filepath:str, force:bool=False):
+    # If file already exists and no force, then do not download file
+    if os.path.isfile(merged_geojson_filepath) and not force: return
     logger.info(f'Merging all tiles from geojson : {geojson_filepath}')
     gdf = gpd.read_file(geojson_filepath)
     merged_gdf = unary_union(gdf.geometry)
