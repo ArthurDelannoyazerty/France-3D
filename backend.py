@@ -11,35 +11,40 @@ from tiles import geodataframe_from_leaflet_to_ign, geodataframe_from_ign_to_lea
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-orders_folder = 'data/orders/'
-
 
 @app.route('/')
 def index():
-    return render_template('index2.html')
+    return render_template('index.html')
 
 @socketio.on('send_geometry')
 def handle_geometry(geojson_str):
     try:
+        
         # Transform the string of geojson into a GeoDataFrame ovject
-        geojson_dict = json.loads(geojson_str)
-        geometry = geojson_dict['zone']["features"][0]["geometry"]
+        order_dict = json.loads(geojson_str)
+        geometry = order_dict['geojson']["features"][0]["geometry"]
         geojson_data = [{"geometry": shape(geometry)}]
         gdf = gpd.GeoDataFrame.from_dict(geojson_data)
 
         # Transform the coordinate system
         gdf = geodataframe_from_leaflet_to_ign(gdf)
+        gdf_json = json.loads(gdf.to_json())
+
+        # Reasssemble the order with ign CRS
+        order_dict['geojson'] = gdf_json
         
         # Create paths
-        order_folder = orders_folder + str(int(datetime.now().timestamp())) + '--' + str(request.sid) + '/'
-        output_filename = 'zone.geojson'
-        output_filepath = order_folder + output_filename
-        
+        orders_folder = 'data/orders/'
+        order_id = str(int(datetime.now().timestamp())) + '--' + str(request.sid)
+        output_filename = 'order.json'
+        order_folder = orders_folder + order_id 
+        order_filepath = order_folder + '/' + output_filename
+
         # Create folder for the current order (after the transformation operation because not created if an error occurs)
         Path(order_folder).mkdir(parents=True, exist_ok=True)
+        with open(order_filepath, 'w') as f:
+            f.write(json.dumps(order_dict))
 
-        # Save the geodataframe to file
-        gdf.to_file(output_filepath, driver='GeoJSON')
         socketio.emit('geojson_received')
     except Exception as e:
         print(f"Error processing geometry: {e}")

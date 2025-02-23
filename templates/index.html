@@ -11,13 +11,40 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
     <style>
-        #map { height: 90vh; }
+        #map { height: 70vh; }
         .controls { text-align: center; margin: 10px; }
+        .checkbox-container { display: flex; flex-direction: column; align-items: flex-start; }
+        .checkbox-container label { margin: 5px; }
+        .slider-container { margin-top: 20px; }
+        .slider-container label { margin-right: 10px; }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div class="controls">
+        <div class="checkbox-container">
+            <label><input type="checkbox" name="point_class" value="1" checked> No Class</label>
+            <label><input type="checkbox" name="point_class" value="2"> Ground</label>
+            <label><input type="checkbox" name="point_class" value="3"> Small Vegetation (0-50cm)</label>
+            <label><input type="checkbox" name="point_class" value="4"> Medium Vegetation (50-150 cm)</label>
+            <label><input type="checkbox" name="point_class" value="5"> High Vegetation (+150 cm)</label>
+            <label><input type="checkbox" name="point_class" value="6"> Building</label>
+            <label><input type="checkbox" name="point_class" value="9"> Water</label>
+            <label><input type="checkbox" name="point_class" value="17"> Bridge</label>
+            <label><input type="checkbox" name="point_class" value="64"> Perennial Soil</label>
+            <label><input type="checkbox" name="point_class" value="66"> Virtual Points</label>
+            <label><input type="checkbox" name="point_class" value="67"> Miscellaneous</label>
+        </div>
+        <div class="slider-container">
+            <label for="points_to_remove">Points to Remove:</label>
+            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0">
+            <span id="points_to_remove_value">0</span>
+        </div>
+        <div class="slider-container">
+            <label for="smoothing">Smoothing:</label>
+            <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0">
+            <span id="smoothing_value">0</span>
+        </div>
         <button id="send-geometry">Send Selection</button>
     </div>
     <script>
@@ -49,6 +76,9 @@
         // Collect drawn geometry in GeoJSON format
         map.on('draw:created', function (e) {
             const layer = e.layer;
+            const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]); // Calculate area in square meters
+            const areaSqKm = area / 1e6; // Convert to square kilometers
+
             drawnItems.addLayer(layer); // Add the drawn item to the map
         });
 
@@ -69,22 +99,55 @@
             }).addTo(map);
         });
 
+        // Ensure at least one checkbox is checked
+        const checkboxes = document.querySelectorAll('input[name="point_class"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function () {
+                const checkedCount = document.querySelectorAll('input[name="point_class"]:checked').length;
+                if (checkedCount < 1) {
+                    this.checked = true;
+                }
+            });
+        });
+
+        // Update slider values
+        const pointsToRemoveSlider = document.getElementById('points_to_remove');
+        const pointsToRemoveValue = document.getElementById('points_to_remove_value');
+        pointsToRemoveSlider.addEventListener('input', function () {
+            pointsToRemoveValue.textContent = pointsToRemoveSlider.value;
+        });
+
+        const smoothingSlider = document.getElementById('smoothing');
+        const smoothingValue = document.getElementById('smoothing_value');
+        smoothingSlider.addEventListener('input', function () {
+            smoothingValue.textContent = smoothingSlider.value;
+        });
+
         // Send GeoJSON data when the button is clicked
         document.getElementById('send-geometry').addEventListener('click', function () {
             const geojson = drawnItems.toGeoJSON();
             if (geojson.features.length < 1) {
                 alert('Please make a selection on the map first.');
-            }
-            else if (geojson.features.length > 1) {
+            } else if (geojson.features.length > 1) {
                 alert('Please make only one selection');
-            }
-            else {
-                socket.emit('send_geometry', JSON.stringify(geojson));
+            } else {
+                const selectedClasses = Array.from(document.querySelectorAll('input[name="point_class"]:checked')).map(cb => parseInt(cb.value));
+                const pointsToRemove = parseInt(pointsToRemoveSlider.value);
+                const smoothing = parseInt(smoothingSlider.value);
+
+                const data = {
+                    geojson: geojson,
+                    point_class: selectedClasses,
+                    points_to_remove: pointsToRemove,
+                    smoothing: smoothing
+                };
+
+                socket.emit('send_geometry', JSON.stringify(data));
             }
         });
 
         socket.on(
-            'geojson_received', 
+            'geojson_received',
             function() {
                 alert('Order received by the server.');
             }
