@@ -216,8 +216,25 @@ input[type="range"] {
     const drawControl = new L.Control.Draw({
       edit: { featureGroup: drawnItems },
       draw: {
-        rectangle: true,
-        polygon: true,
+        polygon: {
+            allowIntersection: false,
+            showArea: true,
+            shapeOptions: {
+                color: 'green',
+                weight: 2,
+                fillColor: 'green',
+                fillOpacity: 0.3
+            }
+        },
+        rectangle: {
+            showArea: true,
+            shapeOptions: {
+                color: 'green',
+                weight: 2,
+                fillColor: 'green',
+                fillOpacity: 0.3
+            }
+        },
         polyline: false,
         circle: false,
         marker: false,
@@ -323,7 +340,7 @@ input[type="range"] {
         // Create a GeoJSON layer
         const geojsonLayer = L.geoJSON(parsedData, {
             style: {
-                color: 'green', // Set the color to green
+                color: 'green',
                 weight: 2,
                 fillOpacity: 0.3
             }
