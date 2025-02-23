@@ -45,7 +45,10 @@ def handle_geometry(geojson_str):
         with open(order_filepath, 'w') as f:
             f.write(json.dumps(order_dict))
 
-        socketio.emit('geojson_received')
+        socketio.emit('alert', f'The order {order_id} have been received.')
+
+
+        socketio.emit('user_info_update', f'The order {order_id} have been received.')
     except Exception as e:
         print(f"Error processing geometry: {e}")
 

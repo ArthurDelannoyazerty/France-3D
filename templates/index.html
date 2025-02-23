@@ -21,6 +21,7 @@
 </head>
 <body>
     <div id="map"></div>
+    <div id="user-info-update"></div>
     <div class="controls">
         <div class="checkbox-container">
             <label><input type="checkbox" name="point_class" value="1" checked> No Class</label>
@@ -147,9 +148,17 @@
         });
 
         socket.on(
-            'geojson_received',
-            function() {
-                alert('Order received by the server.');
+            'alert',
+            function(data) {
+                alert(data);
+            }
+        )
+
+        socket.on(
+            'user_info_update',
+            function(data) {
+                let element = document.getElementById('user-info-update');
+                element.innerText = data;
             }
         )
     </script>
