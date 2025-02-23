@@ -1,29 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
-    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
-    <style>
-        #map { height: 70vh; }
-        .controls { text-align: center; margin: 10px; }
-        .checkbox-container { display: flex; flex-direction: column; align-items: flex-start; }
-        .checkbox-container label { margin: 5px; }
-        .slider-container { margin-top: 20px; }
-        .slider-container label { margin-right: 10px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <!-- Link to external CSS file -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Optional: Include a modern Google Font -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" />
+  <style>
+
+    /* Base styles */
+body {
+  margin: 0;
+  font-family: 'Roboto', sans-serif;
+  background-color: #f7f7f7;
+  color: #333;
+}
+
+/* Layout container */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Map container */
+.map-container {
+  width: 100%;
+}
+#map {
+  width: 100%;
+  height: 70vh;
+  border-radius: 8px;
+}
+
+/* Sidebar styles */
+.sidebar {
+  width: 100%;
+  padding: 15px;
+  box-sizing: border-box;
+}
+
+/* Section headers */
+.sidebar h2 {
+  margin-top: 0;
+  font-size: 1.4rem;
+  color: #007BFF;
+  border-bottom: 2px solid #007BFF;
+  padding-bottom: 5px;
+}
+
+/* Message/Search container */
+.message-container {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 20px;
+}
+.message-container input[type="text"] {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.message-container button {
+  padding: 10px 20px;
+  border: none;
+  background-color: #007BFF;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+.message-container button:hover {
+  background-color: #0056b3;
+}
+
+/* Controls styles */
+.controls {
+  background: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Improved checkbox list using a grid layout */
+.checkbox-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.checkbox-container label {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+/* Slider container styling */
+.slider-container {
+  margin: 20px 0;
+  display: flex;
+  align-items: center;
+}
+.slider-container label {
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+input[type="range"] {
+  flex-grow: 1;
+}
+.controls button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  background-color: #28a745;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+.controls button:hover {
+  background-color: #1e7e34;
+}
+
+/* User info update */
+#user-info-update {
+  margin-top: 15px;
+  font-size: 0.9rem;
+}
+
+/* Responsive layout: two-column on larger screens */
+@media (min-width: 768px) {
+  .layout {
+    flex-direction: row;
+    gap: 15px;
+  }
+  .map-container {
+    flex: 2;
+  }
+  .sidebar {
+    flex: 1;
+    max-width: 400px;
+  }
+}
+
+  </style>
 </head>
 <body>
-    <div id="map"></div>
-    <div id="user-info-update"></div>
-    <div class="controls">
-        <div class="checkbox-container">
+  <div class="layout">
+    <!-- Left column: Map -->
+    <div class="map-container">
+      <div id="map"></div>
+    </div>
+    <!-- Right column: Sidebar with search bar and configuration -->
+    <div class="sidebar">
+      <div class="search-section">
+        <h2>Rechercher une ville</h2>
+        <div class="message-container">
+          <input type="text" id="messageInput" placeholder="Type your message here..." />
+          <button id="send-message">Send</button>
+        </div>
+      </div>
+      <div class="controls-section">
+        <h2>Configuration</h2>
+        <div class="controls">
+          <div class="checkbox-container">
             <label><input type="checkbox" name="point_class" value="1" checked> No Class</label>
             <label><input type="checkbox" name="point_class" value="2" checked> Ground</label>
             <label><input type="checkbox" name="point_class" value="3"> Small Vegetation (0-50cm)</label>
@@ -35,140 +180,147 @@
             <label><input type="checkbox" name="point_class" value="64" checked> Perennial Soil</label>
             <label><input type="checkbox" name="point_class" value="66"> Virtual Points</label>
             <label><input type="checkbox" name="point_class" value="67"> Miscellaneous</label>
-        </div>
-        <div class="slider-container">
+          </div>
+          <div class="slider-container">
             <label for="points_to_remove">Points to Remove:</label>
-            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0">
+            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0" />
             <span id="points_to_remove_value">0</span>
-        </div>
-        <div class="slider-container">
+          </div>
+          <div class="slider-container">
             <label for="smoothing">Smoothing:</label>
-            <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0">
+            <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0" />
             <span id="smoothing_value">0</span>
+          </div>
+          <button id="send-geometry">Send Selection</button>
         </div>
-        <button id="send-geometry">Send Selection</button>
+      </div>
+      <div id="user-info-update"></div>
     </div>
-    <script>
-        const map = L.map('map').setView([46.603354, 1.888334], 6); // Centered on France
+  </div>
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
+  <script>
+    // Initialize map centered on France
+    const map = L.map('map').setView([46.603354, 1.888334], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
 
-        // Initialize Leaflet Draw
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        const drawControl = new L.Control.Draw({
-            edit: { featureGroup: drawnItems },
-            draw: {
-                rectangle: true,
-                polygon: true,
-                polyline: false,
-                circle: false,
-                marker: false,  // Disable marker drawing
-                circlemarker: false // Disable circle marker drawing
-            }
-        });
-        map.addControl(drawControl);
-
-        // Collect drawn geometry in GeoJSON format
-        map.on('draw:created', function (e) {
-            const layer = e.layer;
-            const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]); // Calculate area in square meters
-            const areaSqKm = area / 1e6; // Convert to square kilometers
-
-            drawnItems.addLayer(layer); // Add the drawn item to the map
-        });
-
-        // Setup Socket.IO
-        const socket = io();
-
-        // Request and display polygons from the server
-        socket.emit("request_available_tiles");
-
-        socket.on("receive_geojson", function (geojsonString) {
-            const geojsonData = JSON.parse(geojsonString);
-            const staticPolygons = L.geoJSON(geojsonData, {
-                style: {
-                    color: 'blue',
-                    weight: 1,
-                    fillOpacity: 0.1
-                }
-            }).addTo(map);
-        });
-
-        // Ensure at least one checkbox is checked
-        const checkboxes = document.querySelectorAll('input[name="point_class"]');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function () {
-                const checkedCount = document.querySelectorAll('input[name="point_class"]:checked').length;
-                if (checkedCount < 1) {
-                    this.checked = true;
-                }
-            });
-        });
-
-        // Update slider values
-        const pointsToRemoveSlider = document.getElementById('points_to_remove');
-        const pointsToRemoveValue = document.getElementById('points_to_remove_value');
-        pointsToRemoveSlider.addEventListener('input', function () {
-            pointsToRemoveValue.textContent = pointsToRemoveSlider.value;
-        });
-
-        const smoothingSlider = document.getElementById('smoothing');
-        const smoothingValue = document.getElementById('smoothing_value');
-        smoothingSlider.addEventListener('input', function () {
-            smoothingValue.textContent = smoothingSlider.value;
-        });
-
-        // Send GeoJSON data when the button is clicked
-        document.getElementById('send-geometry').addEventListener('click', function () {
-            const geojson = drawnItems.toGeoJSON();
-            if (geojson.features.length < 1) {
-                alert('Please make a selection on the map first.');
-            } else if (geojson.features.length > 1) {
-                alert('Please make only one selection');
-            } else {
-                const selectedClasses = Array.from(document.querySelectorAll('input[name="point_class"]:checked')).map(cb => parseInt(cb.value));
-                const pointsToRemove = parseInt(pointsToRemoveSlider.value);
-                const smoothing = parseInt(smoothingSlider.value);
-
-                const data = {
-                    geojson: geojson,
-                    point_class: selectedClasses,
-                    points_to_remove: pointsToRemove,
-                    smoothing: smoothing
-                };
-
-                socket.emit('send_geometry', JSON.stringify(data));
-            }
-        });
-
-        socket.on(
-            'alert',
-            function(data) {
-                alert(data);
-            }
-        )
-
-        socket.on(
-            'user_info_update',
-            function(data) {
-                let element = document.getElementById('user-info-update');
-                element.innerText = data;
-            }
-        )
-
-        socket.on(
-            'user_info_update_unsafe',
-            function(data) {
-                let element = document.getElementById('user-info-update');
-                element.innerHTML = data;
-            }
-        )
-    </script>
+    // Initialize drawing layer and controls
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    const drawControl = new L.Control.Draw({
+      edit: { featureGroup: drawnItems },
+      draw: {
+        rectangle: true,
+        polygon: true,
+        polyline: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+      }
+    });
+    map.addControl(drawControl);
+    
+    map.on('draw:created', function (e) {
+      const layer = e.layer;
+      // Calculate area in square meters, then convert to square kilometers
+      const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+      const areaSqKm = area / 1e6;
+      drawnItems.addLayer(layer);
+    });
+    
+    // Setup Socket.IO
+    const socket = io();
+    socket.emit("request_available_tiles");
+    socket.on("receive_geojson", function (geojsonString) {
+      const geojsonData = JSON.parse(geojsonString);
+      L.geoJSON(geojsonData, {
+        style: {
+          color: 'blue',
+          weight: 1,
+          fillOpacity: 0.1
+        }
+      }).addTo(map);
+    });
+    
+    // Ensure at least one checkbox is checked
+    const checkboxes = document.querySelectorAll('input[name="point_class"]');
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function () {
+        const checkedCount = document.querySelectorAll('input[name="point_class"]:checked').length;
+        if (checkedCount < 1) {
+          this.checked = true;
+        }
+      });
+    });
+    
+    // Update slider values
+    const pointsToRemoveSlider = document.getElementById('points_to_remove');
+    const pointsToRemoveValue = document.getElementById('points_to_remove_value');
+    pointsToRemoveSlider.addEventListener('input', function () {
+      pointsToRemoveValue.textContent = pointsToRemoveSlider.value;
+    });
+    
+    const smoothingSlider = document.getElementById('smoothing');
+    const smoothingValue = document.getElementById('smoothing_value');
+    smoothingSlider.addEventListener('input', function () {
+      smoothingValue.textContent = smoothingSlider.value;
+    });
+    
+    // Send geometry data to backend
+    document.getElementById('send-geometry').addEventListener('click', function () {
+      const geojson = drawnItems.toGeoJSON();
+      if (geojson.features.length < 1) {
+        alert('Please make a selection on the map first.');
+      } else if (geojson.features.length > 1) {
+        alert('Please make only one selection');
+      } else {
+        const selectedClasses = Array.from(document.querySelectorAll('input[name="point_class"]:checked'))
+                                    .map(cb => parseInt(cb.value));
+        const pointsToRemove = parseInt(pointsToRemoveSlider.value);
+        const smoothing = parseInt(smoothingSlider.value);
+        const data = {
+          geojson: geojson,
+          point_class: selectedClasses,
+          points_to_remove: pointsToRemove,
+          smoothing: smoothing
+        };
+        socket.emit('send_geometry', JSON.stringify(data));
+      }
+    });
+    
+    // Handle server alerts and user info updates
+    socket.on('alert', data => alert(data));
+    socket.on('user_info_update', data => {
+      document.getElementById('user-info-update').innerText = data;
+    });
+    socket.on('user_info_update_unsafe', data => {
+      document.getElementById('user-info-update').innerHTML = data;
+    });
+    
+    // Message (search) sending functionality
+    const messageInput = document.getElementById('messageInput');
+    const sendMessageButton = document.getElementById('send-message');
+    
+    sendMessageButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+    
+    function sendMessage() {
+      const message = messageInput.value.trim();
+      if (message !== '') {
+        socket.emit('send_message', message);
+        messageInput.value = '';
+      }
+    }
+  </script>
 </body>
 </html>
