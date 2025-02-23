@@ -207,24 +207,26 @@ def add_base_to_surface_mesh(input_file, output_file, z_offset):
     flattened_vertices = unique_vertices.copy()
     flattened_vertices[:, 2] = min_z
     
-    # 5. Build the new vertex list: top vertices + base vertices.
+    # 5. Build the new vertex list for the volume:
+    #    The first n_unique vertices are the original (top) vertices,
+    #    and the next n_unique are the flattened (base) vertices.
     new_vertices = np.vstack((unique_vertices, flattened_vertices))
     
-    # 6. Top faces remain the original connectivity.
+    # 6. The top face remains as the original faces.
     top_faces = faces
     
-    # 7. Compute the convex hull of the flattened vertices (2D: x, y).
+    # 7. Compute the convex hull of the flattened vertices (using x and y only).
     hull = ConvexHull(flattened_vertices[:, :2])
-    convex_hull_indices = hull.vertices  # Indices into flattened_vertices (and unique_vertices)
+    convex_hull_indices = hull.vertices  # indices into flattened_vertices (and unique_vertices)
     
     # 8. Fan-triangulate the convex hull polygon to form the base face,
-    #    reversing the order of the last two vertices to flip the normal.
+    #    reversing the order of the last two vertices to invert the normal.
     base_faces = []
     for i in range(1, len(convex_hull_indices) - 1):
         v0 = convex_hull_indices[0] + n_unique
         v1 = convex_hull_indices[i] + n_unique
         v2 = convex_hull_indices[i + 1] + n_unique
-        base_faces.append([v0, v2, v1])  # reversed order: [v0, v2, v1]
+        base_faces.append([v0, v2, v1])  # inverted order: [v0, v2, v1]
     base_faces = np.array(base_faces)
     
     # 9. Create side faces linking the top convex hull boundary to the base.
@@ -235,21 +237,22 @@ def add_base_to_surface_mesh(input_file, output_file, z_offset):
         top_next = convex_hull_indices[(i + 1) % m]
         base_current = top_current + n_unique
         base_next = top_next + n_unique
-        side_faces.append([top_current, top_next, base_next])
-        side_faces.append([top_current, base_next, base_current])
+        # Invert the winding order for each side triangle:
+        side_faces.append([top_current, base_next, top_next])
+        side_faces.append([top_current, base_current, base_next])
     side_faces = np.array(side_faces)
     
-    # 10. Combine all faces.
+    # 10. Combine all faces: top faces, base faces, and side faces.
     all_faces = np.vstack((top_faces, base_faces, side_faces))
     
-    # 11. Create new triangles from new_vertices using combined face indices.
+    # 11. Create a new triangle array from the new vertices and combined face indices.
     new_triangles = new_vertices[all_faces]
     
-    # 12. Build and save the new mesh.
+    # 12. Build the new mesh using numpy-stl.
     new_mesh = mesh.Mesh(np.zeros(new_triangles.shape[0], dtype=mesh.Mesh.dtype))
     new_mesh.vectors = new_triangles
     
-    logger.info(f'Is final mesh closed : {mesh.Mesh.is_closed(new_mesh)}')
+    logger.info(f'Is final mesh closed: {mesh.Mesh.is_closed(new_mesh)}')
     new_mesh.save(output_file)
     logger.info(f"Extruded mesh saved to {output_file}")
 
