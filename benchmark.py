@@ -152,7 +152,7 @@ def execute_benchmark(order_folderpath:Path):
                 # save file size
                 data_benchmark['point_cloud_file_size'] = ply_filepath.stat().st_size
                 data_benchmark['surface_mesh_file_size'] = surface_mesh_filepath.stat().st_size
-                data_benchmark['finale_file_size'] = final_mesh_filepath.stat().st_size
+                data_benchmark['final_mesh_file_size'] = final_mesh_filepath.stat().st_size
                 
 
                 # Saving the benchmark data
