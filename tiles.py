@@ -1,7 +1,6 @@
 import wget
 import logging
 import os
-import laspy
 import requests
 import json
 import meshlib.mrmeshnumpy
@@ -31,6 +30,7 @@ def init_folders():
     Path('data/data_grille'    ).mkdir(parents=True, exist_ok=True)
     Path('data/orders'         ).mkdir(parents=True, exist_ok=True)
     Path('data/raw_point_cloud').mkdir(parents=True, exist_ok=True)
+    Path('data/benchmark'      ).mkdir(parents=True, exist_ok=True)
 
 
 def geodataframe_from_leaflet_to_ign(gdf:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
