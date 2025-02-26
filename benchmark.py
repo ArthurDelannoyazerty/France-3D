@@ -117,8 +117,6 @@ def execute_benchmark(order_folderpath:Path):
                     xyz = decimate_array(choosen_xyz, percentage_point_to_remove)
                     filtered_array = filter_points_by_polygon(xyz, polygon)
                     merged_xyz.append(filtered_array)                           # Merge the processed tile with the other tiles
-                
-                data_benchmark['total_all_original_points'] = total_all_original_points
 
                 # Save all the needed points
                 merged_xyz = np.vstack(merged_xyz)
@@ -150,6 +148,12 @@ def execute_benchmark(order_folderpath:Path):
                 final_mesh = mesh.Mesh.from_file(final_mesh_filepath)
                 data_benchmark['final_mesh_triangles'] = len(final_mesh.vectors)
                 del final_mesh
+
+                # save file size
+                data_benchmark['point_cloud_file_size'] = ply_filepath.stat().st_size
+                data_benchmark['surface_mesh_file_size'] = surface_mesh_filepath.stat().st_size
+                data_benchmark['finale_file_size'] = final_mesh_filepath.stat().st_size
+                
 
                 # Saving the benchmark data
                 with open(benchmark_result_filepath, 'r') as f:
