@@ -109,6 +109,11 @@ body {
   margin-right: 10px;
   flex-shrink: 0;
 }
+.slider-container span {
+  display: inline-block;
+  width: 40px; /* Adjust the width as needed */
+  text-align: center;
+}
 input[type="range"] {
   flex-grow: 1;
 }
@@ -148,6 +153,42 @@ input[type="range"] {
   }
 }
 
+.estimation-container {
+  margin-top: 20px;
+}
+
+.estimation-bar {
+  width: 100%;
+  height: 20px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.estimation-fill {
+  height: 100%;
+  background-color: green;
+  width: 0;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.tick {
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  background-color: black;
+  top: 0;
+}
+
+.estimation-text {
+  margin-top: 5px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+
   </style>
 </head>
 <body>
@@ -183,7 +224,7 @@ input[type="range"] {
           </div>
           <div class="slider-container">
             <label for="points_to_remove">Points to Remove:</label>
-            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0" />
+            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0" step="0.01"/>
             <span id="points_to_remove_value">0</span>
           </div>
           <div class="slider-container">
@@ -191,6 +232,14 @@ input[type="range"] {
             <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0" />
             <span id="smoothing_value">0</span>
           </div>
+          <div class="estimation-container">
+            <div id="estimation-bar" class="estimation-bar">
+              <div id="estimation-fill" class="estimation-fill"></div>
+              <div id="tick-lower" class="tick"></div>
+              <div id="tick-upper" class="tick"></div>
+            </div>
+            <div id="estimation-text" class="estimation-text">Estimation: 0 MB</div>
+          </div>          
           <button id="send-geometry">Send Selection</button>
         </div>
       </div>
@@ -385,6 +434,99 @@ input[type="range"] {
         messageInput.value = '';
       }
     }
+
+
+
+
+    // Function to calculate the total area of drawn polygons
+    function calculateTotalArea() {
+      let totalArea = 0;
+      drawnItems.eachLayer(function (layer) {
+        if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+          const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+          totalArea += area;
+        }
+      });
+      return totalArea;
+    }
+
+    // Function to estimate file size
+    function estimateFileSize(area, removal_percentage) {
+      const estimated_file_size = ((-20000000 * 15) + 2000000000) * (area/10000) * (1-removal_percentage) / 100    // '15' is the arbitrary number of points per square meter 
+      const estimated_file_size_range = {
+        lower: ((-20000000 * 10) + 2000000000) * (area/10000) * (1-removal_percentage) / 100 ,     // affine function from benchmark | '10' and '25' are the number of points per square meter (normally 10 by experiment shows 25 so that is a large range)
+        upper: ((-20000000 * 25) + 2000000000) * (area/10000) * (1-removal_percentage) / 100       // area is divided by 10000 because conversion hectare -> square meter   |  Don't know why divided by 100 but it works better that way
+      };
+
+      return { estimated_file_size, estimated_file_size_range };
+    }
+
+    // Function to format bytes into a readable string
+    function formatBytes(bytes) {
+      if (bytes === 0) return "0 Bytes";
+
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+      return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    // Function to update the estimation bar and text
+    function updateEstimationDisplay(estimated_size, estimated_size_range) {
+      const estimationBar = document.getElementById('estimation-bar');
+      const estimationFill = document.getElementById('estimation-fill');
+      const tickLower = document.getElementById('tick-lower');
+      const tickUpper = document.getElementById('tick-upper');
+      const estimationText = document.getElementById('estimation-text');
+
+      const maxSize = 2 * 1024 * 1024 * 1024; // 2GB in bytes
+      const sizePercentage = (estimated_size / maxSize) * 100;
+      const lowerPercentage = (estimated_size_range.lower / maxSize) * 100;
+      const upperPercentage = (estimated_size_range.upper / maxSize) * 100;
+
+      estimationFill.style.width = `${sizePercentage}%`;
+      tickLower.style.left = `${lowerPercentage}%`;
+      tickUpper.style.left = `${upperPercentage}%`;
+
+      if (estimated_size < 500 * 1024 * 1024) {
+        estimationFill.style.backgroundColor = 'green';
+      } else if (estimated_size < 1 * 1024 * 1024 * 1024) {
+        estimationFill.style.backgroundColor = 'yellow';
+      } else {
+        estimationFill.style.backgroundColor = 'red';
+      }
+
+      const formattedSize = formatBytes(estimated_size);
+      estimationText.textContent = `Estimation: ${formattedSize}`;
+    }
+
+
+    function updateEstimation() {
+      const totalArea = calculateTotalArea();
+      const removal_percentage = parseInt(pointsToRemoveSlider.value) / 100;
+
+      const { estimated_file_size, estimated_file_size_range } = estimateFileSize(
+        totalArea,
+        removal_percentage
+      );
+
+      updateEstimationDisplay(estimated_file_size, estimated_file_size_range);
+    }
+
+    pointsToRemoveSlider.addEventListener('input', updateEstimation);
+    smoothingSlider.addEventListener('input', updateEstimation);
+    checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateEstimation));
+
+    // Update estimation when the map is drawn or modified
+    map.on('draw:created', updateEstimation);
+    map.on('draw:edited', updateEstimation);
+    map.on('draw:deleted', updateEstimation);
+
+    // Initial estimation update
+    updateEstimation();
+
+
   </script>
 </body>
 </html>
