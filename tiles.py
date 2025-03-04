@@ -185,15 +185,18 @@ def meshlib_terrain_point_cloud_to_surface_mesh(ply_pointcloud_filepath:str, mes
     mesh = meshlib.mrmeshpy.terrainTriangulation(vector_3d)
 
     logger.info('Remeshing')
-    relax_params = meshlib.mrmeshpy.MeshRelaxParams()
-    relax_params.iterations = smoothing  # Number of smoothing iterations
-
-    # Apply the relaxation (smoothing) to the mesh
-    meshlib.mrmeshpy.relax(mesh, relax_params)
+    if smoothing!=0:
+        relax_params = meshlib.mrmeshpy.MeshRelaxParams()
+        relax_params.iterations = smoothing  # Number of smoothing iterations
+        meshlib.mrmeshpy.relax(mesh, relax_params)
+        
+    logger.info('Saving mesh')
     meshlib.mrmeshpy.saveMesh(mesh, mesh_filepath)
+    logger.info('Mesh saved')
 
 
 def add_base_to_surface_mesh(input_file, output_file, z_offset):
+    logger.info('Adding base to the mesh.')
     # 1. Load the original STL mesh.
     original_mesh = mesh.Mesh.from_file(input_file)
     
