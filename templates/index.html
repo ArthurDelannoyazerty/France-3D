@@ -102,7 +102,7 @@ body {
 /* Slider container styling */
 .slider-container {
   margin: 20px 0;
-  display: flex;
+  display: grid;
   align-items: center;
 }
 .slider-container label {
@@ -223,14 +223,14 @@ input[type="range"] {
             <label><input type="checkbox" name="point_class" value="67"> Miscellaneous</label>
           </div>
           <div class="slider-container">
-            <label for="points_to_remove">Points to Remove:</label>
-            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0" step="0.01"/>
+            <label for="points_to_remove">Points to Remove (%) :</label>
             <span id="points_to_remove_value">0</span>
+            <input type="range" id="points_to_remove" name="points_to_remove" min="0" max="100" value="0" step="0.01"/>
           </div>
           <div class="slider-container">
             <label for="smoothing">Smoothing:</label>
-            <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0" />
             <span id="smoothing_value">0</span>
+            <input type="range" id="smoothing" name="smoothing" min="0" max="10" value="0" />
           </div>
           <div class="estimation-container">
             <div id="estimation-bar" class="estimation-bar">
