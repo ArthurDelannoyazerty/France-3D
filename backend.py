@@ -115,6 +115,7 @@ def process_order(order_folderpath:Path):
     choosen_point_class        = dict_order['point_class']
     percentage_point_to_remove = dict_order['points_to_remove']
     smoothing_iteration        = dict_order['smoothing']
+    terrain_amplification      = dict_order['terrain_amplification']
 
     laz_folderpath = Path('data/raw_point_cloud/')
     order_zone_filepath   = order_folderpath / 'order.json'
@@ -160,7 +161,10 @@ def process_order(order_folderpath:Path):
             merged_xyz.append(filtered_array)                           # Merge the processed tile with the other tiles
         # Save all the needed points
         merged_xyz = np.vstack(merged_xyz)
-        merged_xyz = merged_xyz - merged_xyz[0]     # Center the point cloud on (0,0,0)
+        lowest_points_index = np.argmin(merged_xyz[:,2])
+        logger.info(f'lowest point index : {lowest_points_index}  |  lowest point : {merged_xyz[lowest_points_index]}')
+        merged_xyz = merged_xyz - merged_xyz[lowest_points_index]             # Set the lowest point at z=0 and mainly center the map on (0,0)
+        merged_xyz = merged_xyz * np.array([1, 1, terrain_amplification])     # Amplify the terrain in the z direction
         numpy_to_ply(merged_xyz, ply_filepath)
 
     # Point cloud to mesh
@@ -173,7 +177,8 @@ def process_order(order_folderpath:Path):
 
 
 if __name__ == '__main__':
-    setup_logging()
+    log_name = Path(__file__).stem
+    setup_logging(log_name)
     logger = logging.getLogger(__name__)
 
     # Init folder tree if not existing
